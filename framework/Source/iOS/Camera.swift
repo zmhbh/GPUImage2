@@ -51,14 +51,14 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
             guard let audioEncodingTarget = audioEncodingTarget else {
-                self.removeAudioInputsAndOutputs()
+                //self.removeAudioInputsAndOutputs()
                 return
             }
             do {
                 try self.addAudioInputsAndOutputs()
                 audioEncodingTarget.activateAudioTrack()
             } catch {
-                fatalError("ERROR: Could not connect audio target with error: \(error)")
+                print("ERROR: Could not connect audio target with error: \(error)")
             }
         }
     }
@@ -66,9 +66,9 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public let targets = TargetContainer()
     public var delegate: CameraDelegate?
     public let captureSession:AVCaptureSession
-    let inputCamera:AVCaptureDevice!
+    public let inputCamera:AVCaptureDevice!
     let videoInput:AVCaptureDeviceInput!
-    let videoOutput:AVCaptureVideoDataOutput!
+    public let videoOutput:AVCaptureVideoDataOutput!
     var microphone:AVCaptureDevice?
     var audioInput:AVCaptureDeviceInput?
     var audioOutput:AVCaptureAudioDataOutput?
@@ -151,6 +151,15 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
             captureSession.addOutput(videoOutput)
         }
         captureSession.sessionPreset = sessionPreset
+        
+        if let connections = videoOutput.connections as? [AVCaptureConnection] {
+            for connection in connections {
+                if(connection.isVideoMirroringSupported) {
+                    connection.isVideoMirrored = (location == .frontFacing)
+                }
+            }
+        }
+
         captureSession.commitConfiguration()
 
         super.init()
@@ -161,7 +170,10 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     deinit {
         sharedImageProcessingContext.runOperationSynchronously{
             self.stopCapture()
-            self.videoOutput.setSampleBufferDelegate(nil, queue:nil)
+            //Fix crash when hitting catch block in init block
+            if(self.videoOutput != nil) {
+                self.videoOutput.setSampleBufferDelegate(nil, queue:nil)
+            }
             self.audioOutput?.setSampleBufferDelegate(nil, queue:nil)
         }
     }
@@ -278,6 +290,10 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
         if (captureSession.isRunning) {
             captureSession.stopRunning()
         }
+        
+        //Fixes need to call this after calling stopCapture
+        //when app will enter background
+        glFinish()
     }
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
@@ -287,7 +303,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     // MARK: -
     // MARK: Audio processing
     
-    func addAudioInputsAndOutputs() throws {
+    public func addAudioInputsAndOutputs() throws {
         guard (audioOutput == nil) else { return }
         
         captureSession.beginConfiguration()
@@ -306,7 +322,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
         audioOutput?.setSampleBufferDelegate(self, queue:audioProcessingQueue)
     }
     
-    func removeAudioInputsAndOutputs() {
+    public func removeAudioInputsAndOutputs() {
         guard (audioOutput != nil) else { return }
         
         captureSession.beginConfiguration()

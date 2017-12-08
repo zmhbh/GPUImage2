@@ -33,7 +33,7 @@ public enum Rotation {
     case rotateClockwiseAndFlipVertically
     case rotateClockwiseAndFlipHorizontally
     
-    func flipsDimensions() -> Bool {
+    public func flipsDimensions() -> Bool {
         switch self {
             case .noRotation, .rotate180, .flipHorizontally, .flipVertically: return false
             case .rotateCounterclockwise, .rotateClockwise, .rotateClockwiseAndFlipVertically, .rotateClockwiseAndFlipHorizontally: return true

@@ -6,7 +6,7 @@ public class MovieInput: ImageSource {
     
     let yuvConversionShader:ShaderProgram
     let asset:AVAsset
-    let assetReader:AVAssetReader
+    var assetReader:AVAssetReader!
     let playAtActualSpeed:Bool
     let loop:Bool
     var videoEncodingIsFinished = false
@@ -24,12 +24,6 @@ public class MovieInput: ImageSource {
         self.loop = loop
         self.yuvConversionShader = crashOnShaderCompileFailure("MovieInput"){try sharedImageProcessingContext.programForVertexShader(defaultVertexShaderForInputs(2), fragmentShader:YUVConversionFullRangeFragmentShader)}
         
-        assetReader = try AVAssetReader(asset:self.asset)
-        
-        let outputSettings:[String:AnyObject] = [(kCVPixelBufferPixelFormatTypeKey as String):NSNumber(value:Int32(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange))]
-        let readerVideoTrackOutput = AVAssetReaderTrackOutput(track:self.asset.tracks(withMediaType: AVMediaTypeVideo)[0], outputSettings:outputSettings)
-        readerVideoTrackOutput.alwaysCopiesSampleData = false
-        assetReader.add(readerVideoTrackOutput)
         // TODO: Audio here
     }
 
@@ -41,16 +35,48 @@ public class MovieInput: ImageSource {
 
     // MARK: -
     // MARK: Playback control
+    
+    public func createReader() -> AVAssetReader?
+    {
+        var assetRead: AVAssetReader?
+        do {
+            assetRead = try AVAssetReader.init(asset: self.asset)
+            
+            let outputSettings:[String:AnyObject] = [(kCVPixelBufferPixelFormatTypeKey as String):NSNumber(value:Int32(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange))]
+            let readerVideoTrackOutput = AVAssetReaderTrackOutput(track:self.asset.tracks(withMediaType: AVMediaTypeVideo)[0], outputSettings:outputSettings)
+            readerVideoTrackOutput.alwaysCopiesSampleData = false
+            
+            assetRead!.add(readerVideoTrackOutput)
+        } catch {
+            print("Could not create asset reader: \(error)")
+        }
+        
+        return assetRead
+    }
+
 
     public func start() {
+        assetReader = createReader()
+        
+        if(assetReader == nil) { return }
+        
         asset.loadValuesAsynchronously(forKeys:["tracks"], completionHandler:{
             DispatchQueue.global(priority:DispatchQueue.GlobalQueuePriority.default).async(execute: {
                 guard (self.asset.statusOfValue(forKey: "tracks", error:nil) == .loaded) else { return }
-
-                guard self.assetReader.startReading() else {
-                    print("Couldn't start reading")
+                
+                do {
+                    try ObjC.catchException {
+                        guard self.assetReader.startReading() else {
+                            print("Couldn't start reading")
+                            return
+                        }
+                    }
+                }
+                catch {
+                    print("Couldn't start reading \(error)")
                     return
                 }
+
                 
                 var readerVideoTrackOutput:AVAssetReaderOutput? = nil;
                 
@@ -68,7 +94,7 @@ public class MovieInput: ImageSource {
                     self.assetReader.cancelReading()
                     
                     if (self.loop) {
-                        // TODO: Restart movie processing
+                        self.start()
                     } else {
                         self.endProcessing()
                     }
@@ -78,8 +104,14 @@ public class MovieInput: ImageSource {
     }
     
     public func cancel() {
-        assetReader.cancelReading()
-        self.endProcessing()
+        if(assetReader != nil) {
+            assetReader.cancelReading()
+            self.endProcessing()
+        }
+        
+        //Fixes need to call this after calling stopCapture
+        //when app will enter background
+        glFinish()
     }
     
     func endProcessing() {

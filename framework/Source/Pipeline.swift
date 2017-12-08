@@ -51,6 +51,15 @@ public extension ImageSource {
         targets.removeAll()
     }
     
+    public func remove(_ target:ImageConsumer) {
+        for (testTarget, index) in targets {
+            if(target === testTarget) {
+                target.removeSourceAtIndex(index)
+                targets.remove(target)
+            }
+        }
+    }
+    
     public func updateTargetsWithFramebuffer(_ framebuffer:Framebuffer) {
         if targets.count == 0 { // Deal with the case where no targets are attached by immediately returning framebuffer to cache
             framebuffer.lock()
@@ -157,6 +166,16 @@ public class TargetContainer:Sequence {
             self.targets.removeAll()
         }
 #endif
+    }
+    
+    public func remove(_ target:ImageConsumer) {
+        #if os(Linux)
+            self.targets = self.targets.filter { $0.value !== target }
+        #else
+            dispatchQueue.async{
+                self.targets = self.targets.filter { $0.value !== target }
+            }
+        #endif
     }
 }
 

@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1F499A731FDA0F9F0000E37E /* ObjC.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F499A711FDA0F9E0000E37E /* ObjC.m */; };
+		1F499A741FDA0F9F0000E37E /* ObjC.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F499A711FDA0F9E0000E37E /* ObjC.m */; };
+		1F499A751FDA0F9F0000E37E /* ObjC.h in Headers */ = {isa = PBXBuildFile; fileRef = 1F499A721FDA0F9F0000E37E /* ObjC.h */; };
+		1F499A761FDA0F9F0000E37E /* ObjC.h in Headers */ = {isa = PBXBuildFile; fileRef = 1F499A721FDA0F9F0000E37E /* ObjC.h */; };
 		BC09239E1C92658200A2ADFA /* ShaderProgram_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */; };
 		BC0923A11C92661D00A2ADFA /* Pipeline_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */; };
 		BC0923A21C92664900A2ADFA /* Framebuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB279EB1C8D11630013E213 /* Framebuffer.swift */; };
@@ -370,6 +374,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1F499A711FDA0F9E0000E37E /* ObjC.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ObjC.m; path = Source/ObjC.m; sourceTree = "<group>"; };
+		1F499A721FDA0F9F0000E37E /* ObjC.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ObjC.h; path = Source/ObjC.h; sourceTree = "<group>"; };
+		1F499A771FDA0FE20000E37E /* GPUImage-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "GPUImage-Bridging-Header.h"; path = "Source/GPUImage-Bridging-Header.h"; sourceTree = "<group>"; };
 		BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ShaderProgram_Tests.swift; path = Tests/ShaderProgram_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Pipeline_Tests.swift; path = Tests/Pipeline_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC1E12F41C9F2FD7008F844F /* ThreeInput.vsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; name = ThreeInput.vsh; path = Source/Operations/Shaders/ThreeInput.vsh; sourceTree = "<group>"; };
@@ -961,8 +968,11 @@
 		BC6E7CAD1C39A9D8006DF678 /* Other */ = {
 			isa = PBXGroup;
 			children = (
+				1F499A721FDA0F9F0000E37E /* ObjC.h */,
+				1F499A711FDA0F9E0000E37E /* ObjC.m */,
 				BC4C85ED1C9F042900FD95D8 /* ConvertedShaders_GL.swift */,
 				BC9E35531E52521F00B8604F /* ConvertedShaders_GLES.swift */,
+				1F499A771FDA0FE20000E37E /* GPUImage-Bridging-Header.h */,
 			);
 			name = Other;
 			sourceTree = "<group>";
@@ -1198,6 +1208,7 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1F499A751FDA0F9F0000E37E /* ObjC.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1205,6 +1216,7 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1F499A761FDA0F9F0000E37E /* ObjC.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1295,13 +1307,14 @@
 				TargetAttributes = {
 					BC6E7CAA1C39A9D8006DF678 = {
 						CreatedOnToolsVersion = 7.2;
-						LastSwiftMigration = 0800;
+						LastSwiftMigration = 0910;
 					};
 					BC6E7CB41C39A9D8006DF678 = {
 						CreatedOnToolsVersion = 7.2;
 					};
 					BC9E34E81E524A2200B8604F = {
 						CreatedOnToolsVersion = 8.2.1;
+						LastSwiftMigration = 0910;
 						ProvisioningStyle = Automatic;
 					};
 					BC9E34F01E524A2200B8604F = {
@@ -1454,6 +1467,7 @@
 				BC7FD11C1CB0795A00037949 /* NormalBlend.swift in Sources */,
 				BC4EE15E1CB3481F00AD8A65 /* ThresholdSobelEdgeDetection.swift in Sources */,
 				BC7FD1911CB1D2A300037949 /* ImageGenerator.swift in Sources */,
+				1F499A731FDA0F9F0000E37E /* ObjC.m in Sources */,
 				BC7FD1201CB079B200037949 /* SaturationBlend.swift in Sources */,
 				BCA4E2491CC3EF26007B51BA /* ColourFASTFeatureDetection.swift in Sources */,
 				BC7FD0FD1CB06E0000037949 /* Position.swift in Sources */,
@@ -1637,6 +1651,7 @@
 				BC9E356E1E5256CE00B8604F /* FalseColor.swift in Sources */,
 				BC9E35881E52572000B8604F /* ThresholdSobelEdgeDetection.swift in Sources */,
 				BC9E356F1E5256D000B8604F /* HighlightsAndShadows.swift in Sources */,
+				1F499A741FDA0F9F0000E37E /* ObjC.m in Sources */,
 				BC9E35AA1E52578900B8604F /* Halftone.swift in Sources */,
 				BC9E35961E52574A00B8604F /* ImageBuffer.swift in Sources */,
 				BC9E35831E52571100B8604F /* LocalBinaryPattern.swift in Sources */,
@@ -1788,6 +1803,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/GPUImage-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 3.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -1831,6 +1847,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.9;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/GPUImage-Bridging-Header.h";
 				SWIFT_VERSION = 3.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -1910,6 +1927,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -1930,6 +1948,7 @@
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 3.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1939,6 +1958,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
