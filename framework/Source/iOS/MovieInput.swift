@@ -108,10 +108,6 @@ public class MovieInput: ImageSource {
             assetReader.cancelReading()
             self.endProcessing()
         }
-        
-        //Fixes need to call this after calling stopCapture
-        //when app will enter background
-        glFinish()
     }
     
     func endProcessing() {

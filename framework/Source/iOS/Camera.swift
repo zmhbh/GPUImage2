@@ -85,6 +85,8 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     var totalFrameTimeDuringCapture:Double = 0.0
     var framesSinceLastCheck = 0
     var lastCheckTime = CFAbsoluteTimeGetCurrent()
+    
+    var captureSessionRestartAttempts = 0
 
     public init(sessionPreset:String, cameraDevice:AVCaptureDevice? = nil, location:PhysicalCameraLocation = .backFacing, captureAsYUV:Bool = true) throws {
         
@@ -165,17 +167,33 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
         super.init()
         
         videoOutput.setSampleBufferDelegate(self, queue:cameraProcessingQueue)
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(Camera.captureSessionRuntimeError(note:)), name: NSNotification.Name.AVCaptureSessionRuntimeError, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(Camera.captureSessionDidStartRunning(note:)), name: NSNotification.Name.AVCaptureSessionDidStartRunning, object: nil)
     }
     
     deinit {
         sharedImageProcessingContext.runOperationSynchronously{
             self.stopCapture()
             //Fix crash when hitting catch block in init block
-            if(self.videoOutput != nil) {
-                self.videoOutput.setSampleBufferDelegate(nil, queue:nil)
-            }
+            self.videoOutput?.setSampleBufferDelegate(nil, queue:nil)
+            
             self.audioOutput?.setSampleBufferDelegate(nil, queue:nil)
         }
+    }
+    
+    func captureSessionRuntimeError(note: NSNotification) {
+        print("Capture Session Runtime Error: \(note.userInfo)")
+        if(self.captureSessionRestartAttempts < 1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.startCapture()
+            }
+            self.captureSessionRestartAttempts += 1
+        }
+    }
+    
+    func captureSessionDidStartRunning(note: NSNotification) {
+        self.captureSessionRestartAttempts = 0
     }
     
     public func captureOutput(_ captureOutput:AVCaptureOutput!, didOutputSampleBuffer sampleBuffer:CMSampleBuffer!, from connection:AVCaptureConnection!) {
@@ -290,10 +308,6 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
         if (captureSession.isRunning) {
             captureSession.stopRunning()
         }
-        
-        //Fixes need to call this after calling stopCapture
-        //when app will enter background
-        glFinish()
     }
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
