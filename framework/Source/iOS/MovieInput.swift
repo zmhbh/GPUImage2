@@ -83,13 +83,13 @@ public class MovieInput: ImageSource {
                 do {
                     try ObjC.catchException {
                         guard assetReader.startReading() else {
-                            print("Couldn't start reading")
+                            print("Couldn't start reading: \(assetReader.error)")
                             return
                         }
                     }
                 }
                 catch {
-                    print("Couldn't start reading \(error)")
+                    print("Couldn't start reading: \(error)")
                     return
                 }
                 
@@ -211,7 +211,10 @@ public class MovieInput: ImageSource {
         
         let luminanceGLTextureResult = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, sharedImageProcessingContext.coreVideoTextureCache, movieFrame, nil, GLenum(GL_TEXTURE_2D), GL_LUMINANCE, GLsizei(bufferWidth), GLsizei(bufferHeight), GLenum(GL_LUMINANCE), GLenum(GL_UNSIGNED_BYTE), 0, &luminanceGLTexture)
         
-        assert(luminanceGLTextureResult == kCVReturnSuccess && luminanceGLTexture != nil)
+        if(luminanceGLTextureResult != kCVReturnSuccess || luminanceGLTexture == nil) {
+            print("Could not create LuminanceGLTexture")
+            return
+        }
         
         let luminanceTexture = CVOpenGLESTextureGetName(luminanceGLTexture!)
         
@@ -230,14 +233,16 @@ public class MovieInput: ImageSource {
         luminanceFramebuffer.cache = sharedImageProcessingContext.framebufferCache
         luminanceFramebuffer.lock()
         
-        
         var chrominanceGLTexture: CVOpenGLESTexture?
         
         glActiveTexture(GLenum(GL_TEXTURE1))
         
         let chrominanceGLTextureResult = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, sharedImageProcessingContext.coreVideoTextureCache, movieFrame, nil, GLenum(GL_TEXTURE_2D), GL_LUMINANCE_ALPHA, GLsizei(bufferWidth / 2), GLsizei(bufferHeight / 2), GLenum(GL_LUMINANCE_ALPHA), GLenum(GL_UNSIGNED_BYTE), 1, &chrominanceGLTexture)
         
-        assert(chrominanceGLTextureResult == kCVReturnSuccess && chrominanceGLTexture != nil)
+        if(chrominanceGLTextureResult != kCVReturnSuccess || chrominanceGLTexture == nil) {
+            print("Could not create ChrominanceGLTexture")
+            return
+        }
         
         let chrominanceTexture = CVOpenGLESTextureGetName(chrominanceGLTexture!)
         
