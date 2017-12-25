@@ -187,12 +187,10 @@ open class BasicOperation: ImageProcessingOperation {
     }
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
-        sharedImageProcessingContext.runOperationAsynchronously{
-            guard let renderFramebuffer = self.renderFramebuffer, (!renderFramebuffer.timingStyle.isTransient()) else { return }
+        guard let renderFramebuffer = self.renderFramebuffer, (!renderFramebuffer.timingStyle.isTransient()) else { return }
             
-            renderFramebuffer.lock()
-            target.newFramebufferAvailable(renderFramebuffer, fromSourceIndex:atIndex)
-        }
+        renderFramebuffer.lock()
+        target.newFramebufferAvailable(renderFramebuffer, fromSourceIndex:atIndex)
     }
 }
 
