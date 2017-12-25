@@ -24,6 +24,8 @@ public class RenderView:UIView, ImageConsumer {
         return sharedImageProcessingContext.passthroughShader
     }()
     
+    private var internalLayer: CAEAGLLayer!
+    
     // TODO: Need to set viewport to appropriate size, resize viewport on view reshape
     
     required public init?(coder:NSCoder) {
@@ -48,6 +50,8 @@ public class RenderView:UIView, ImageConsumer {
         let eaglLayer = self.layer as! CAEAGLLayer
         eaglLayer.isOpaque = true
         eaglLayer.drawableProperties = [NSNumber(value:false): kEAGLDrawablePropertyRetainedBacking, kEAGLColorFormatRGBA8: kEAGLDrawablePropertyColorFormat]
+        
+        self.internalLayer = eaglLayer
     }
     
     deinit {
@@ -55,8 +59,6 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     func createDisplayFramebuffer() {
-        sharedImageProcessingContext.makeCurrentContext()
-        
         var newDisplayFramebuffer:GLuint = 0
         glGenFramebuffers(1, &newDisplayFramebuffer)
         displayFramebuffer = newDisplayFramebuffer
@@ -67,7 +69,7 @@ public class RenderView:UIView, ImageConsumer {
         displayRenderbuffer = newDisplayRenderbuffer
         glBindRenderbuffer(GLenum(GL_RENDERBUFFER), displayRenderbuffer!)
         
-        sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.layer as! CAEAGLLayer)
+        sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.internalLayer)
         
         var backingWidth:GLint = 0
         var backingHeight:GLint = 0
@@ -110,20 +112,8 @@ public class RenderView:UIView, ImageConsumer {
     
     public func newFramebufferAvailable(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
         if (self.displayFramebuffer == nil) {
-            DispatchQueue.main.async {
-                self.createDisplayFramebuffer()
-                
-                sharedImageProcessingContext.runOperationAsynchronously {
-                    self.displayFramebuffer(framebuffer, fromSourceIndex: fromSourceIndex)
-                }
-            }
+            self.createDisplayFramebuffer()
         }
-        else {
-            self.displayFramebuffer(framebuffer, fromSourceIndex: fromSourceIndex)
-        }
-    }
-    
-    public func displayFramebuffer(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
         self.activateDisplayFramebuffer()
         
         clearFramebufferWithColor(backgroundRenderColor)
