@@ -79,7 +79,12 @@ open class BasicOperation: ImageProcessingOperation {
     
     deinit {
         //debugPrint("Deallocating operation: \(self)")
-        if(renderFramebuffer != nil) { renderFramebuffer.unlock() }
+        
+        // Run on the shared que to prevent unlocking if the framebuffer
+        // is mid-initialization and has not yet been locked
+        sharedImageProcessingContext.runOperationAsynchronously { [weak self] in
+            if(self?.renderFramebuffer != nil) { self?.renderFramebuffer.unlock() }
+        }
     }
     
     // MARK: -
