@@ -1,8 +1,14 @@
 import UIKit
 
+protocol RenderViewDelegate: class {
+    func didDisplayFramebuffer(renderView: RenderView, framebuffer: Framebuffer)
+}
+
 // TODO: Add support for transparency
 // TODO: Deal with view resizing
 public class RenderView:UIView, ImageConsumer {
+    weak var delegate:RenderViewDelegate?
+    
     public var backgroundRenderColor = Color.black
     public var fillMode = FillMode.preserveAspectRatio
     public var orientation:ImageOrientation = .portrait
@@ -17,19 +23,19 @@ public class RenderView:UIView, ImageConsumer {
     private lazy var displayShader:ShaderProgram = {
         return sharedImageProcessingContext.passthroughShader
     }()
-
+    
     // TODO: Need to set viewport to appropriate size, resize viewport on view reshape
     
     required public init?(coder:NSCoder) {
         super.init(coder:coder)
         self.commonInit()
     }
-
+    
     public override init(frame:CGRect) {
         super.init(frame:frame)
         self.commonInit()
     }
-
+    
     override public class var layerClass:Swift.AnyClass {
         get {
             return CAEAGLLayer.self
@@ -49,19 +55,19 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     func createDisplayFramebuffer() {
+        sharedImageProcessingContext.makeCurrentContext()
+        
         var newDisplayFramebuffer:GLuint = 0
         glGenFramebuffers(1, &newDisplayFramebuffer)
         displayFramebuffer = newDisplayFramebuffer
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), displayFramebuffer!)
-
+        
         var newDisplayRenderbuffer:GLuint = 0
         glGenRenderbuffers(1, &newDisplayRenderbuffer)
         displayRenderbuffer = newDisplayRenderbuffer
         glBindRenderbuffer(GLenum(GL_RENDERBUFFER), displayRenderbuffer!)
         
-        DispatchQueue.main.sync {
-            sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.layer as! CAEAGLLayer)
-        }
+        sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.layer as! CAEAGLLayer)
         
         var backingWidth:GLint = 0
         var backingHeight:GLint = 0
@@ -72,7 +78,7 @@ public class RenderView:UIView, ImageConsumer {
         guard ((backingWidth > 0) && (backingHeight > 0)) else {
             fatalError("View had a zero size")
         }
-
+        
         glFramebufferRenderbuffer(GLenum(GL_FRAMEBUFFER), GLenum(GL_COLOR_ATTACHMENT0), GLenum(GL_RENDERBUFFER), displayRenderbuffer!)
         
         let status = glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER))
@@ -103,18 +109,33 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     public func newFramebufferAvailable(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
-        if (displayFramebuffer == nil) {
-            self.createDisplayFramebuffer()
+        if (self.displayFramebuffer == nil) {
+            DispatchQueue.main.async {
+                self.createDisplayFramebuffer()
+                
+                sharedImageProcessingContext.runOperationAsynchronously {
+                    self.displayFramebuffer(framebuffer, fromSourceIndex: fromSourceIndex)
+                }
+            }
         }
+        else {
+            self.displayFramebuffer(framebuffer, fromSourceIndex: fromSourceIndex)
+        }
+    }
+    
+    public func displayFramebuffer(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
         self.activateDisplayFramebuffer()
         
         clearFramebufferWithColor(backgroundRenderColor)
-
+        
         let scaledVertices = fillMode.transformVertices(verticallyInvertedImageVertices, fromInputSize:framebuffer.sizeForTargetOrientation(self.orientation), toFitSize:backingSize)
         renderQuadWithShader(self.displayShader, vertices:scaledVertices, inputTextures:[framebuffer.texturePropertiesForTargetOrientation(self.orientation)])
         framebuffer.unlock()
         
         glBindRenderbuffer(GLenum(GL_RENDERBUFFER), displayRenderbuffer!)
         sharedImageProcessingContext.presentBufferForDisplay()
+        
+        self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
     }
 }
+
