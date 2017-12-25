@@ -79,6 +79,7 @@ open class BasicOperation: ImageProcessingOperation {
     
     deinit {
         //debugPrint("Deallocating operation: \(self)")
+        if(renderFramebuffer != nil) { renderFramebuffer.unlock() }
     }
     
     // MARK: -
