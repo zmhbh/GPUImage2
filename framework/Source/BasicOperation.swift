@@ -82,8 +82,10 @@ open class BasicOperation: ImageProcessingOperation {
         
         // Run on the shared que to prevent unlocking if the framebuffer
         // is mid-initialization and has not yet been locked
-        sharedImageProcessingContext.runOperationAsynchronously { [weak self] in
-            if(self?.renderFramebuffer != nil) { self?.renderFramebuffer.unlock() }
+        // Also don't reference self since self will have dealloc'd if this is run async
+        let renderFramebuffer = self.renderFramebuffer
+        sharedImageProcessingContext.runOperationAsynchronously {
+            if(renderFramebuffer != nil) { renderFramebuffer!.unlock() }
         }
     }
     
