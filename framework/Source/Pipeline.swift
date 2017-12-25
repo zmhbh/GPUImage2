@@ -35,10 +35,14 @@ public extension ImageSource {
         if let targetIndex = atTargetIndex {
             target.setSource(self, atIndex:targetIndex)
             targets.append(target, indexAtTarget:targetIndex)
-            transmitPreviousImage(to:target, atIndex:targetIndex)
+            sharedImageProcessingContext.runOperationAsynchronously {
+                self.transmitPreviousImage(to:target, atIndex:targetIndex)
+            }
         } else if let indexAtTarget = target.addSource(self) {
             targets.append(target, indexAtTarget:indexAtTarget)
-            transmitPreviousImage(to:target, atIndex:indexAtTarget)
+            sharedImageProcessingContext.runOperationAsynchronously {
+                self.transmitPreviousImage(to:target, atIndex:indexAtTarget)
+            }
         } else {
             debugPrint("Warning: tried to add target beyond target's input capacity")
         }
