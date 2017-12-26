@@ -141,16 +141,25 @@ public class MovieInput: ImageSource {
             if let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() {
                 if (playAtActualSpeed) {
                     // Do this outside of the video processing queue to not slow that down while waiting
+                    
+                    // Sample time eg. first frame is 0,30 second frame is 1,30
                     let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
+                    // This produces the rolling frame rate
                     let differenceFromLastFrame = CMTimeSubtract(currentSampleTime, previousFrameTime)
-                    let currentActualTime = CFAbsoluteTimeGetCurrent()
                     
-                    let frameTimeDifference = CMTimeGetSeconds(differenceFromLastFrame)
-                    let actualTimeDifference = currentActualTime - previousActualFrameTime
+                    // Frame duration in seconds, shorten it ever so slightly to speed up playback
+                    let frameTimeDifference = CMTimeGetSeconds(differenceFromLastFrame) - 0.0022
+                    // Actual time passed since last frame displayed
+                    var actualTimeDifference = CFAbsoluteTimeGetCurrent() - previousActualFrameTime
                     
+                    // If the frame duration is longer than the duration we are actually display them at
+                    // Slow the duration we are actually displaying them at
                     if (frameTimeDifference > actualTimeDifference) {
                         usleep(UInt32(round(1000000.0 * (frameTimeDifference - actualTimeDifference))))
                     }
+                    
+                    //actualTimeDifference = CFAbsoluteTimeGetCurrent() - previousActualFrameTime
+                    //print("frameTime: \(String(format: "%.6f", frameTimeDifference)) actualTime: \(String(format: "%.6f", actualTimeDifference))")
                     
                     previousFrameTime = currentSampleTime
                     previousActualFrameTime = CFAbsoluteTimeGetCurrent()
