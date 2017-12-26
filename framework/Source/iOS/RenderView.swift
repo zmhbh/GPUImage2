@@ -1,13 +1,13 @@
 import UIKit
 
-protocol RenderViewDelegate: class {
+public protocol RenderViewDelegate: class {
     func didDisplayFramebuffer(renderView: RenderView, framebuffer: Framebuffer)
 }
 
 // TODO: Add support for transparency
 // TODO: Deal with view resizing
 public class RenderView:UIView, ImageConsumer {
-    weak var delegate:RenderViewDelegate?
+    public weak var delegate:RenderViewDelegate?
     
     public var backgroundRenderColor = Color.black
     public var fillMode = FillMode.preserveAspectRatio

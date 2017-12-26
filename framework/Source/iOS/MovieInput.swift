@@ -35,6 +35,10 @@ public class MovieInput: ImageSource {
         let inputAsset = AVURLAsset(url:url, options:inputOptions)
         try self.init(asset:inputAsset, videoComposition: nil, playAtActualSpeed:playAtActualSpeed, loop:loop)
     }
+    
+    deinit {
+        self.cancel()
+    }
 
     // MARK: -
     // MARK: Playback control
@@ -79,6 +83,7 @@ public class MovieInput: ImageSource {
             DispatchQueue.global(priority:DispatchQueue.GlobalQueuePriority.default).async(execute: {
                 guard (self.asset.statusOfValue(forKey: "tracks", error:nil) == .loaded) else { return }
                 guard let assetReader = self.assetReader else { return }
+                guard self.started else { return }
                 
                 do {
                     try ObjC.catchException {
@@ -168,6 +173,7 @@ public class MovieInput: ImageSource {
                 sharedImageProcessingContext.runOperationSynchronously{
                     self.process(movieFrame:sampleBuffer)
                     CMSampleBufferInvalidate(sampleBuffer)
+                    
                 }
             } else {
                 if (!loop) {
