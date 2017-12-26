@@ -113,7 +113,6 @@ open class BasicOperation: ImageProcessingOperation {
     
     func renderFrame() {
         if(renderFramebuffer != nil) { renderFramebuffer.unlock() }
-        
         renderFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:sizeOfInitialStageBasedOnFramebuffer(inputFramebuffers[0]!), stencil:mask != nil)
         renderFramebuffer.lock()
         

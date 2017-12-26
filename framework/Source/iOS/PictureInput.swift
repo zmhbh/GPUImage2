@@ -94,6 +94,7 @@ public class PictureInput: ImageSource {
             do {
                 // TODO: Alter orientation based on metadata from photo
                 self.imageFramebuffer = try Framebuffer(context:sharedImageProcessingContext, orientation:orientation, size:GLSize(width:widthToUseForTexture, height:heightToUseForTexture), textureOnly:true)
+                self.imageFramebuffer.lock()
             } catch {
                 fatalError("ERROR: Unable to initialize framebuffer of size (\(widthToUseForTexture), \(heightToUseForTexture)) with error: \(error)")
             }
@@ -123,6 +124,12 @@ public class PictureInput: ImageSource {
     public convenience init(imageName:String, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
         guard let image = UIImage(named:imageName) else { fatalError("No such image named: \(imageName) in your application bundle") }
         self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
+    }
+    
+    deinit {
+        //debugPrint("Deallocating operation: \(self)")
+        
+        imageFramebuffer.unlock()
     }
 
     public func processImage(synchronously:Bool = false) {
