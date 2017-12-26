@@ -150,7 +150,7 @@ public class MovieInput: ImageSource {
                     // Frame duration in seconds, shorten it ever so slightly to speed up playback
                     let frameTimeDifference = CMTimeGetSeconds(differenceFromLastFrame) - 0.0022
                     // Actual time passed since last frame displayed
-                    var actualTimeDifference = CFAbsoluteTimeGetCurrent() - previousActualFrameTime
+                    let actualTimeDifference = CFAbsoluteTimeGetCurrent() - previousActualFrameTime
                     
                     // If the frame duration is longer than the duration we are actually display them at
                     // Slow the duration we are actually displaying them at
