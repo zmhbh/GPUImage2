@@ -79,14 +79,6 @@ open class BasicOperation: ImageProcessingOperation {
     
     deinit {
         //debugPrint("Deallocating operation: \(self)")
-        
-        // Run on the shared que to prevent unlocking if the framebuffer
-        // is mid-initialization and has not yet been locked
-        // Also don't reference self since self will have dealloc'd if this is run async
-        let renderFramebuffer = self.renderFramebuffer
-        sharedImageProcessingContext.runOperationAsynchronously {
-            if(renderFramebuffer != nil) { renderFramebuffer!.unlock() }
-        }
     }
     
     // MARK: -
@@ -112,9 +104,7 @@ open class BasicOperation: ImageProcessingOperation {
     }
     
     func renderFrame() {
-        if(renderFramebuffer != nil) { renderFramebuffer.unlock() }
         renderFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:sizeOfInitialStageBasedOnFramebuffer(inputFramebuffers[0]!), stencil:mask != nil)
-        renderFramebuffer.lock()
         
         let textureProperties = initialTextureProperties()
         configureFramebufferSpecificUniforms(inputFramebuffers[0]!)
@@ -193,10 +183,10 @@ open class BasicOperation: ImageProcessingOperation {
     }
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
-        guard let renderFramebuffer = self.renderFramebuffer, (!renderFramebuffer.timingStyle.isTransient()) else { return }
-            
-        renderFramebuffer.lock()
-        target.newFramebufferAvailable(renderFramebuffer, fromSourceIndex:atIndex)
+        //guard let renderFramebuffer = self.renderFramebuffer, (!renderFramebuffer.timingStyle.isTransient()) else { return }
+        
+        //renderFramebuffer.lock()
+        //target.newFramebufferAvailable(renderFramebuffer, fromSourceIndex:atIndex)
     }
 }
 
