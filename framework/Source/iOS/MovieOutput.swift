@@ -31,10 +31,11 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     var pixelBuffer:CVPixelBuffer? = nil
     var renderFramebuffer:Framebuffer!
     
-    let movieProcessingContext: OpenGLContext
+    let movieProcessingContext:OpenGLContext
     
     public init(URL:Foundation.URL, size:Size, fileType:String = AVFileTypeQuickTimeMovie, liveVideo:Bool = false, settings:[String:AnyObject]? = nil) throws {
         imageProcessingShareGroup = sharedImageProcessingContext.context.sharegroup
+        // Since we cannot access self before calling super, initialize here and not above
         let movieProcessingContext = OpenGLContext()
         
         if movieProcessingContext.supportsTextureCaches() {
@@ -232,11 +233,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             if !self.movieProcessingContext.supportsTextureCaches() {
                 self.pixelBuffer = nil
             }
-            
-            sharedImageProcessingContext.runOperationAsynchronously {
-                //Must be called from the context it came from
-                framebuffer.unlock()
-            }
+
+            framebuffer.unlock()
         }
     }
     

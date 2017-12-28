@@ -57,7 +57,7 @@ public class Framebuffer {
     let hash:Int64
     let textureOverride:Bool
     
-    weak var context:OpenGLContext?
+    unowned var context:OpenGLContext
     
     public init(context:OpenGLContext, orientation:ImageOrientation, size:GLSize, textureOnly:Bool = false, minFilter:Int32 = GL_LINEAR, magFilter:Int32 = GL_LINEAR, wrapS:Int32 = GL_CLAMP_TO_EDGE, wrapT:Int32 = GL_CLAMP_TO_EDGE, internalFormat:Int32 = GL_RGBA, format:Int32 = GL_BGRA, type:Int32 = GL_UNSIGNED_BYTE, stencil:Bool = false, overriddenTexture:GLuint? = nil) throws {
         self.context = context
@@ -144,7 +144,7 @@ public class Framebuffer {
     }
 
     public func texturePropertiesForOutputRotation(_ rotation:Rotation) -> InputTextureProperties {
-        return InputTextureProperties(textureVBO:context!.textureVBO(for:rotation), texture:texture)
+        return InputTextureProperties(textureVBO:context.textureVBO(for:rotation), texture:texture)
     }
 
     public func texturePropertiesForTargetOrientation(_ targetOrientation:ImageOrientation) -> InputTextureProperties {
@@ -163,21 +163,29 @@ public class Framebuffer {
     weak var cache:FramebufferCache?
     var framebufferRetainCount = 0
     func lock() {
-        framebufferRetainCount += 1
+        context.runOperationSynchronously {
+            framebufferRetainCount += 1
+        }
     }
 
     func resetRetainCount() {
-        framebufferRetainCount = 0
+        context.runOperationSynchronously {
+            framebufferRetainCount = 0
+        }
     }
     
     public func unlock() {
-        framebufferRetainCount -= 1
-        if (framebufferRetainCount < 1) {
-            if ((framebufferRetainCount < 0) && (cache != nil)) {
-                print("WARNING: Tried to overrelease a framebuffer")
+        // Make sure this gets run on the current framebuffer context
+        // In the event this framebuffer is used on a different context
+        context.runOperationSynchronously {
+            framebufferRetainCount -= 1
+            if (framebufferRetainCount < 1) {
+                if ((framebufferRetainCount < 0) && (cache != nil)) {
+                    print("WARNING: Tried to overrelease a framebuffer")
+                }
+                framebufferRetainCount = 0
+                cache?.returnToCache(self)
             }
-            framebufferRetainCount = 0
-            cache?.returnToCache(self)
         }
     }
 }
