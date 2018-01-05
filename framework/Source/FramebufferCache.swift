@@ -26,7 +26,7 @@ public class FramebufferCache {
         let hash = hashForFramebufferWithProperties(orientation:orientation, size:size, textureOnly:textureOnly, minFilter:minFilter, magFilter:magFilter, wrapS:wrapS, wrapT:wrapT, internalFormat:internalFormat, format:format, type:type, stencil:stencil)
         let framebuffer:Framebuffer
         if ((framebufferCache[hash]?.count ?? -1) > 0) {
-//            print("Restoring previous framebuffer")
+            //print("Restoring previous framebuffer")
             framebuffer = framebufferCache[hash]!.removeLast()
             framebuffer.orientation = orientation
         } else {
@@ -47,7 +47,7 @@ public class FramebufferCache {
     }
     
     func returnToCache(_ framebuffer:Framebuffer) {
-//        print("Returning to cache: \(framebuffer)")
+        //sprint("Returning to cache: \(framebuffer)")
         context.runOperationSynchronously{
             if (self.framebufferCache[framebuffer.hash] != nil) {
                 self.framebufferCache[framebuffer.hash]!.append(framebuffer)

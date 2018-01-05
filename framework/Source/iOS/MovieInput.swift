@@ -58,6 +58,7 @@ public class MovieInput: ImageSource {
             else {
                 let readerVideoTrackOutput = AVAssetReaderVideoCompositionOutput(videoTracks: self.asset.tracks(withMediaType: AVMediaTypeVideo), videoSettings: outputSettings)
                 readerVideoTrackOutput.videoComposition = self.videoComposition
+                readerVideoTrackOutput.alwaysCopiesSampleData = false
                 assetReader!.add(readerVideoTrackOutput)
             }
 
@@ -103,14 +104,13 @@ public class MovieInput: ImageSource {
     
     public func cancel() {
         if let assetReader = self.assetReader {
+            // Make sure this is called before cancelling the reader
+            // If you don't and this is a looping video it will just start the video over again
+            self.started = false
+            
             assetReader.cancelReading()
-            self.endProcessing()
+            self.assetReader = nil
         }
-    }
-    
-    func endProcessing() {
-        self.assetReader = nil
-        self.started = false
     }
     
     // MARK: -
@@ -133,57 +133,56 @@ public class MovieInput: ImageSource {
             self.readNextVideoFrame(from:readerVideoTrackOutput!)
         }
         
-        if (assetReader.status == .completed) {
-            assetReader.cancelReading()
-            
-            if (self.loop) {
-                self.endProcessing()
-                self.start()
-            } else {
-                self.endProcessing()
-            }
+        // Make sure the video is still playing and has not been cancelled by user
+        if (self.loop && self.started) {
+            self.cancel()
+            self.start()
+        } else {
+            self.cancel()
         }
     }
     
     func readNextVideoFrame(from videoTrackOutput:AVAssetReaderOutput) {
         guard let assetReader = self.assetReader else { return }
-        
-        let renderStart = DispatchTime.now()
-        var frameDurationNanos: Float64 = 0
-        
-        if (assetReader.status == .reading) {
-            if let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() {
-                if (playAtActualSpeed) {
-                    // Do this outside of the video processing queue to not slow that down while waiting
-                    
-                    // Sample time eg. first frame is 0,30 second frame is 1,30
-                    let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
-                    
-                    // Retrieve the rolling frame rate (duration between each frame)
-                    let frameDuration = CMTimeSubtract(currentSampleTime, previousFrameTime)
-                    frameDurationNanos = CMTimeGetSeconds(frameDuration) * 1_000_000_000
-                    
-                    self.previousFrameTime = currentSampleTime
-                }
+    
+        if let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() {
+            
+            let renderStart = DispatchTime.now()
+            var frameDurationNanos: Float64 = 0
+            
+            if (playAtActualSpeed) {
+                // Sample time eg. first frame is 0,30 second frame is 1,30
+                let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
                 
-                sharedImageProcessingContext.runOperationSynchronously{
-                    self.process(movieFrame:sampleBuffer)
-                    CMSampleBufferInvalidate(sampleBuffer)
-                }
+                // Retrieve the rolling frame rate (duration between each frame)
+                let frameDuration = CMTimeSubtract(currentSampleTime, previousFrameTime)
+                frameDurationNanos = CMTimeGetSeconds(frameDuration) * 1_000_000_000
                 
-                if(playAtActualSpeed) {
-                    let renderEnd = DispatchTime.now()
-                    
-                    // Find the amount of time it took to display the last frame in microseconds
-                    let renderDurationNanos = Double(renderEnd.uptimeNanoseconds - renderStart.uptimeNanoseconds)
-                    
-                    // Find how much time we should wait to display the next frame. So it would be the frame duration minus the
-                    // amount of time we already spent rendering the current frame.
-                    let waitDurationNanos = Int(frameDurationNanos - renderDurationNanos)
-                    
-                    if(waitDurationNanos > 0) {
-                        mach_wait_until(mach_absolute_time()+self.nanosToAbs(UInt64(waitDurationNanos)))
-                    }
+                self.previousFrameTime = currentSampleTime
+            }
+            
+            sharedImageProcessingContext.runOperationSynchronously{
+                self.process(movieFrame:sampleBuffer)
+                CMSampleBufferInvalidate(sampleBuffer)
+            }
+            
+            if(playAtActualSpeed) {
+                let renderEnd = DispatchTime.now()
+                
+                // Find the amount of time it took to display the last frame
+                let renderDurationNanos = Double(renderEnd.uptimeNanoseconds - renderStart.uptimeNanoseconds)
+                
+                // Find how much time we should wait to display the next frame. So it would be the frame duration minus the
+                // amount of time we already spent rendering the current frame.
+                let waitDurationNanos = Int(frameDurationNanos - renderDurationNanos)
+                
+                // When the wait duration begins returning negative values consistently
+                // It means the OS is unable to provide enough processing time for the above work
+                // and that you need to adjust the real time thread policy below
+                //print("Render duration: \(String(format: "%.4f",renderDurationNanos / 1_000_000)) ms Wait duration: \(String(format: "%.4f",Double(waitDurationNanos) / 1_000_000)) ms")
+                
+                if(waitDurationNanos > 0) {
+                    mach_wait_until(mach_absolute_time()+self.nanosToAbs(UInt64(waitDurationNanos)))
                 }
             }
         }
@@ -202,6 +201,7 @@ public class MovieInput: ImageSource {
 //        processingFrameTime = currentSampleTime
         self.process(movieFrame:movieFrame, withSampleTime:currentSampleTime)
     }
+    
     
     //Code from pull request https://github.com/BradLarson/GPUImage2/pull/183
     func process(movieFrame:CVPixelBuffer, withSampleTime:CMTime) {
@@ -248,7 +248,6 @@ public class MovieInput: ImageSource {
             return
         }
         
-        luminanceFramebuffer.cache = sharedImageProcessingContext.framebufferCache
         luminanceFramebuffer.lock()
         
         var chrominanceGLTexture: CVOpenGLESTexture?
@@ -276,7 +275,6 @@ public class MovieInput: ImageSource {
             return
         }
         
-        chrominanceFramebuffer.cache = sharedImageProcessingContext.framebufferCache
         chrominanceFramebuffer.lock()
         
         let movieFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:GLSize(width:GLint(bufferWidth), height:GLint(bufferHeight)), textureOnly:false)
@@ -295,7 +293,7 @@ public class MovieInput: ImageSource {
             print("Current frame time : \(1000.0 * currentFrameTime) ms")
         }
     }
-
+    
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
         // Not needed for movie inputs
     }
@@ -309,15 +307,23 @@ public class MovieInput: ImageSource {
         mach_timebase_info(&timebaseInfo)
         let clock2abs = Double(timebaseInfo.denom) / Double(timebaseInfo.numer) * Double(NSEC_PER_MSEC)
         
-        let period      = UInt32(0.00 * clock2abs)
-        // Setup for 30 milliseconds of work
-        // The anticpated render duration is in the 10-30 ms range on an iPhone 6 for 1080p video with no filters
-        // If the computation value is set too high, setting the thread policy will fail
-        let computation = UInt32(30 * clock2abs)
-        // With filters the upper bound is unlimited but with a lot of approximation it falls in the 20-100 ms range with 1080p video
-        // If we surpass our constraint the computation is scheduled for a later point
-        // You can test this by setting a low constraint and then applying a filter
-        let constraint  = UInt32(100 * clock2abs)
+        // http://docs.huihoo.com/darwin/kernel-programming-guide/scheduler/chapter_8_section_4.html
+        //
+        // To see the impact of adjusting these values, uncomment the print statement above mach_wait_until() in self.readNextVideoFrame()
+        //
+        // Setup for 5 ms of work.
+        // The anticpated frame render duration is in the 1-3 ms range on an iPhone 6 for 1080p without filters and 1-7 ms range with filters
+        // If the render duration is allowed to exceed 16ms (the duration of a frame in 60fps video)
+        // the 60fps video will no longer be playing in real time.
+        // If this computation value is set too high, setting the thread policy will fail.
+        let computation = UInt32(5 * clock2abs)
+        // Tell the scheduler the next 20 ms of work needs to be done as soon as possible.
+        let period      = UInt32(0 * clock2abs)
+        // According to the above scheduling chapter this constraint only appears relevant
+        // if preemtible is set to true and the period is not 0. If this is wrong, please let me know.
+        let constraint  = UInt32(5 * clock2abs)
+        
+        //print("period: \(period) computation: \(computation) constraint: \(constraint)")
         
         let THREAD_TIME_CONSTRAINT_POLICY_COUNT = mach_msg_type_number_t(MemoryLayout<thread_time_constraint_policy>.size / MemoryLayout<integer_t>.size)
         
@@ -328,7 +334,7 @@ public class MovieInput: ImageSource {
         policy.period = period
         policy.computation = computation
         policy.constraint = constraint
-        policy.preemptible = 0
+        policy.preemptible = 0 // Very important, otherwise video will slow down over time.
         
         ret = withUnsafeMutablePointer(to: &policy) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(THREAD_TIME_CONSTRAINT_POLICY_COUNT)) {

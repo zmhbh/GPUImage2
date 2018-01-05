@@ -163,29 +163,21 @@ public class Framebuffer {
     weak var cache:FramebufferCache?
     var framebufferRetainCount = 0
     func lock() {
-        context.runOperationSynchronously {
-            framebufferRetainCount += 1
-        }
+        framebufferRetainCount += 1
     }
 
     func resetRetainCount() {
-        context.runOperationSynchronously {
-            framebufferRetainCount = 0
-        }
+        framebufferRetainCount = 0
     }
     
     public func unlock() {
-        // Make sure this gets run on the current framebuffer context
-        // In the event this framebuffer is used on a different context
-        context.runOperationSynchronously {
-            framebufferRetainCount -= 1
-            if (framebufferRetainCount < 1) {
-                if ((framebufferRetainCount < 0) && (cache != nil)) {
-                    print("WARNING: Tried to overrelease a framebuffer")
-                }
-                framebufferRetainCount = 0
-                cache?.returnToCache(self)
+        framebufferRetainCount -= 1
+        if (framebufferRetainCount < 1) {
+            if ((framebufferRetainCount < 0) && (cache != nil)) {
+                print("WARNING: Tried to overrelease a framebuffer")
             }
+            framebufferRetainCount = 0
+            cache?.returnToCache(self)
         }
     }
 }
