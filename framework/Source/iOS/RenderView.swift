@@ -44,6 +44,16 @@ public class RenderView:UIView, ImageConsumer {
         }
     }
     
+    override public var bounds: CGRect {
+        didSet {
+            // Check if the size changed
+            if(oldValue.size != self.bounds.size) {
+                // Destroy the displayFramebuffer so we render at the correct size
+                self.destroyDisplayFramebuffer()
+            }
+        }
+    }
+    
     func commonInit() {
         self.contentScaleFactor = UIScreen.main.scale
         
@@ -58,7 +68,7 @@ public class RenderView:UIView, ImageConsumer {
         destroyDisplayFramebuffer()
     }
     
-    func createDisplayFramebuffer() {
+    func createDisplayFramebuffer() -> Bool {
         var newDisplayFramebuffer:GLuint = 0
         glGenFramebuffers(1, &newDisplayFramebuffer)
         displayFramebuffer = newDisplayFramebuffer
@@ -79,15 +89,19 @@ public class RenderView:UIView, ImageConsumer {
         backingSize = GLSize(width:backingWidth, height:backingHeight)
         
         guard ((backingWidth > 0) && (backingHeight > 0)) else {
-            fatalError("View had a zero size")
+            print("Warning: View had a zero size")
+            return false
         }
         
         glFramebufferRenderbuffer(GLenum(GL_FRAMEBUFFER), GLenum(GL_COLOR_ATTACHMENT0), GLenum(GL_RENDERBUFFER), displayRenderbuffer!)
         
         let status = glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER))
         if (status != GLenum(GL_FRAMEBUFFER_COMPLETE)) {
-            fatalError("Display framebuffer creation failed with error: \(FramebufferCreationError(errorCode:status))")
+            print("Warning: Display framebuffer creation failed with error: \(FramebufferCreationError(errorCode:status))")
+            return false
         }
+        
+        return true
     }
     
     func destroyDisplayFramebuffer() {
@@ -112,8 +126,9 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     public func newFramebufferAvailable(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
-        if (self.displayFramebuffer == nil) {
-            self.createDisplayFramebuffer()
+        if (self.displayFramebuffer == nil && !self.createDisplayFramebuffer()) {
+            // Bail if we couldn't successfully create the displayFramebuffer
+            return
         }
         self.activateDisplayFramebuffer()
         
