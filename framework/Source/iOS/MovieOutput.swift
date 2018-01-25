@@ -212,6 +212,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 self.startTime = frameTime
                 self.firstFrameTime = frameTime
             }
+            
+            self.previousFrameTime = frameTime
 
             guard (self.assetWriterVideoInput.isReadyForMoreMediaData || (!self.encodingLiveVideo)) else {
                 debugPrint("Had to drop a frame at time \(frameTime)")

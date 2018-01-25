@@ -99,6 +99,9 @@ open class BasicOperation: ImageProcessingOperation {
         if (UInt(inputFramebuffers.count) >= maximumInputs) {
             renderFrame()
             
+            // Carry this over if we have it
+            outputFramebuffer.sampleTime = framebuffer.sampleTime
+            
             updateTargetsWithFramebuffer(outputFramebuffer)
         }
     }

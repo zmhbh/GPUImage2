@@ -29,6 +29,7 @@ public class FramebufferCache {
             //print("Restoring previous framebuffer")
             framebuffer = framebufferCache[hash]!.removeLast()
             framebuffer.orientation = orientation
+            framebuffer.sampleTime = nil
         } else {
             do {
                 //debugPrint("Generating new framebuffer at size: \(size)")
