@@ -99,18 +99,24 @@ public class Framebuffer {
     deinit {
         if (!textureOverride) {
             var mutableTexture = texture
-            glDeleteTextures(1, &mutableTexture)
+            context.runOperationAsynchronously {
+                glDeleteTextures(1, &mutableTexture)
+            }
             //debugPrint("Delete texture at size: \(size)")
         }
         
         if let framebuffer = framebuffer {
 			var mutableFramebuffer = framebuffer
-            glDeleteFramebuffers(1, &mutableFramebuffer)
+            context.runOperationAsynchronously {
+                glDeleteFramebuffers(1, &mutableFramebuffer)
+            }
         }
 
         if let stencilBuffer = stencilBuffer {
             var mutableStencil = stencilBuffer
-            glDeleteRenderbuffers(1, &mutableStencil)
+            context.runOperationAsynchronously {
+                glDeleteRenderbuffers(1, &mutableStencil)
+            }
         }
     }
     
