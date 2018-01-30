@@ -1,3 +1,4 @@
+// TODO: Have this adjust in real time to changing crop sizes
 // TODO: Verify at all orientations
 
 open class Crop: BasicOperation {
