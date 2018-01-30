@@ -1,7 +1,6 @@
-// TODO: Have this adjust in real time to changing crop sizes
 // TODO: Verify at all orientations
 
-public class Crop: BasicOperation {
+open class Crop: BasicOperation {
     public var cropSizeInPixels: Size?
     public var locationOfCropInPixels: Position?
     
@@ -9,7 +8,7 @@ public class Crop: BasicOperation {
         super.init(fragmentShader:PassthroughFragmentShader, numberOfInputs:1)
     }
 
-    override func renderFrame() {
+    override open func renderFrame() {
         let inputFramebuffer:Framebuffer = inputFramebuffers[0]!
         let inputSize = inputFramebuffer.sizeForTargetOrientation(.portrait)
         
@@ -29,7 +28,12 @@ public class Crop: BasicOperation {
         }
         let normalizedCropSize = Size(width:Float(finalCropSize.width) / Float(inputSize.width), height:Float(finalCropSize.height) / Float(inputSize.height))
         
-        renderFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:finalCropSize, stencil:false)
+        do {
+            renderFramebuffer = try Framebuffer(context: sharedImageProcessingContext, orientation: .portrait, size: finalCropSize, stencil:false)
+        } catch {
+            print("Could not create a framebuffer of the size  (\(finalCropSize.width), \(finalCropSize.height)), error: \(error)")
+            return
+        }
         
         let textureProperties = InputTextureProperties(textureCoordinates:inputFramebuffer.orientation.rotationNeededForOrientation(.portrait).croppedTextureCoordinates(offsetFromOrigin:normalizedOffsetFromOrigin, cropSize:normalizedCropSize), texture:inputFramebuffer.texture)
         

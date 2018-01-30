@@ -120,7 +120,7 @@ public class Framebuffer {
         }
     }
     
-    func sizeForTargetOrientation(_ targetOrientation:ImageOrientation) -> GLSize {
+    public func sizeForTargetOrientation(_ targetOrientation:ImageOrientation) -> GLSize {
         if self.orientation.rotationNeededForOrientation(targetOrientation).flipsDimensions() {
             return GLSize(width:size.height, height:size.width)
         } else {
