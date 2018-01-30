@@ -15,6 +15,7 @@
 open class TransformOperation: BasicOperation {
     public var transform:Matrix4x4 = Matrix4x4.identity { didSet { uniformSettings["transformMatrix"] = transform } }
     public var anchorTopLeft = false
+    public var ignoreAspectRatio = false
     var normalizedImageVertices:[GLfloat]!
     
     public init() {
@@ -30,7 +31,10 @@ open class TransformOperation: BasicOperation {
 
     override open func configureFramebufferSpecificUniforms(_ inputFramebuffer:Framebuffer) {
         let outputRotation = overriddenOutputRotation ?? inputFramebuffer.orientation.rotationNeededForOrientation(.portrait)
-        let aspectRatio = inputFramebuffer.aspectRatioForRotation(outputRotation)
+        var aspectRatio = inputFramebuffer.aspectRatioForRotation(outputRotation)
+        if(ignoreAspectRatio) {
+            aspectRatio = 1
+        }
         let orthoMatrix = orthographicMatrix(-1.0, right:1.0, bottom:-1.0 * aspectRatio, top:1.0 * aspectRatio, near:-1.0, far:1.0, anchorTopLeft:anchorTopLeft)
         normalizedImageVertices = normalizedImageVerticesForAspectRatio(aspectRatio)
         
