@@ -28,12 +28,7 @@ open class Crop: BasicOperation {
         }
         let normalizedCropSize = Size(width:Float(finalCropSize.width) / Float(inputSize.width), height:Float(finalCropSize.height) / Float(inputSize.height))
         
-        do {
-            renderFramebuffer = try Framebuffer(context: sharedImageProcessingContext, orientation: .portrait, size: finalCropSize, stencil:false)
-        } catch {
-            print("Could not create a framebuffer of the size  (\(finalCropSize.width), \(finalCropSize.height)), error: \(error)")
-            return
-        }
+        renderFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:finalCropSize, stencil:false)
         
         let textureProperties = InputTextureProperties(textureCoordinates:inputFramebuffer.orientation.rotationNeededForOrientation(.portrait).croppedTextureCoordinates(offsetFromOrigin:normalizedOffsetFromOrigin, cropSize:normalizedCropSize), texture:inputFramebuffer.texture)
         
