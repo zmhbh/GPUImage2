@@ -6,16 +6,15 @@ public class MovieInput: ImageSource {
     
     let yuvConversionShader:ShaderProgram
     let asset:AVAsset
-    let videoComposition: AVVideoComposition?
-    var assetReader:AVAssetReader?
-    var started = false
+    let videoComposition:AVVideoComposition?
     let playAtActualSpeed:Bool
     public var loop:Bool
-    var previousFrameTime = kCMTimeZero
+    var previousFrameTime:CMTime?
+    var currentThread:Thread?
+    var startFrameTime:CMTime?
 
     var numberOfFramesCaptured = 0
     var totalFrameTimeDuringCapture:Double = 0.0
-    
     
     // TODO: Add movie reader synchronization
     // TODO: Someone will have to add back in the AVPlayerItem logic, because I don't know how that works
@@ -41,28 +40,37 @@ public class MovieInput: ImageSource {
 
     // MARK: -
     // MARK: Playback control
+    // Only call these methods from the main thread
 
     @objc public func start() {
-        guard !self.started else { return }
+        if let currentThread = self.currentThread,
+            currentThread.isExecuting,
+            !currentThread.isCancelled {
+            // If the current thread is running and has not been cancelled, bail.
+            return
+        }
+        // Just to be safe.
+        self.currentThread?.cancel()
         
-        self.started = true
-        
-        Thread.detachNewThreadSelector(#selector(beginReading), toTarget: self, with: nil)
+        self.currentThread = Thread(target: self, selector: #selector(beginReading), object: nil)
+        self.currentThread?.start()
     }
     
     public func cancel() {
-        self.started = false
-        
-        self.assetReader?.cancelReading()
+        self.currentThread?.cancel()
+        self.currentThread = nil
+    }
+    
+    public func pause() {
+        self.cancel()
+        self.startFrameTime = self.previousFrameTime
     }
     
     // MARK: -
     // MARK: Internal processing functions
     
-    func createReader()
+    func createReader() -> AVAssetReader?
     {
-        self.assetReader = nil
-        
         do {
             let outputSettings:[String:AnyObject] =
                 [(kCVPixelBufferPixelFormatTypeKey as String):NSNumber(value:Int32(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange))]
@@ -81,34 +89,37 @@ public class MovieInput: ImageSource {
                 assetReader.add(readerVideoTrackOutput)
             }
             
-            self.assetReader = assetReader
+            if let startFrameTime = self.startFrameTime {
+                assetReader.timeRange = CMTimeRange(start: startFrameTime, duration: kCMTimePositiveInfinity)
+            }
+            self.startFrameTime = nil
+            
+            return assetReader
         } catch {
             print("Could not create asset reader: \(error)")
         }
+        return nil
     }
     
     @objc func beginReading() {
+        let thread = Thread.current
+        
         self.configureThread()
         
-        self.createReader()
-        
-        guard let assetReader = self.assetReader else {
-            self.started = false
-            return
+        guard let assetReader = self.createReader() else {
+            return // A return statement will end thread execution
         }
         
         do {
             try ObjC.catchException {
                 guard assetReader.startReading() else {
                     print("Couldn't start reading: \(assetReader.error)")
-                    self.started = false
                     return
                 }
             }
         }
         catch {
             print("Couldn't start reading: \(error)")
-            self.started = false
             return
         }
         
@@ -116,27 +127,30 @@ public class MovieInput: ImageSource {
         
         for output in assetReader.outputs {
             if(output.mediaType == AVMediaTypeVideo) {
-                readerVideoTrackOutput = output;
+                readerVideoTrackOutput = output
             }
         }
         
         while(assetReader.status == .reading) {
-            self.readNextVideoFrame(from:readerVideoTrackOutput!)
+            if(thread.isCancelled) { break }
+            self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
         }
         
-        // Make sure the video is still playing and has not been cancelled by user
-        // and also that we didn't only want one frame
-        if (self.loop && self.started) {
-            self.cancel()
-            self.start()
-        } else {
-            self.cancel()
+        assetReader.cancelReading()
+        
+        // Since only the main thread will cancel threads
+        // jump onto the main thead to prevent the current thread from being cancelled
+        // in between the below if statement check and creating the new thread
+        DispatchQueue.main.async {
+            // Start the video over so long as it wasn't cancelled
+            if (self.loop && !thread.isCancelled) {
+                self.currentThread = Thread(target: self, selector: #selector(self.beginReading), object: nil)
+                self.currentThread?.start()
+            }
         }
     }
     
-    func readNextVideoFrame(from videoTrackOutput:AVAssetReaderOutput) {
-        guard let assetReader = self.assetReader else { return }
-    
+    func readNextVideoFrame(with assetReader: AVAssetReader, from videoTrackOutput:AVAssetReaderOutput) {
         if let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() {
             
             let renderStart = DispatchTime.now()
@@ -147,7 +161,7 @@ public class MovieInput: ImageSource {
                 let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
                 
                 // Retrieve the rolling frame rate (duration between each frame)
-                let frameDuration = CMTimeSubtract(currentSampleTime, previousFrameTime)
+                let frameDuration = CMTimeSubtract(currentSampleTime, self.previousFrameTime ?? kCMTimeZero)
                 frameDurationNanos = CMTimeGetSeconds(frameDuration) * 1_000_000_000
                 
                 self.previousFrameTime = currentSampleTime
@@ -178,19 +192,12 @@ public class MovieInput: ImageSource {
                 }
             }
         }
-//        else if (synchronizedMovieWriter != nil) {
-//            if (assetReader.status == .Completed) {
-//                self.endProcessing()
-//            }
-//        }
-        
     }
     
     func process(movieFrame frame:CMSampleBuffer) {
         let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(frame)
         let movieFrame = CMSampleBufferGetImageBuffer(frame)!
-    
-//        processingFrameTime = currentSampleTime
+        
         self.process(movieFrame:movieFrame, withSampleTime:currentSampleTime)
     }
     
