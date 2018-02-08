@@ -128,7 +128,7 @@ public class Framebuffer {
         }
     }
     
-    func aspectRatioForRotation(_ rotation:Rotation) -> Float {
+    public func aspectRatioForRotation(_ rotation:Rotation) -> Float {
         if rotation.flipsDimensions() {
             return Float(size.width) / Float(size.height)
         } else {

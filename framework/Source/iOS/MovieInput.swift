@@ -9,12 +9,19 @@ public class MovieInput: ImageSource {
     let videoComposition:AVVideoComposition?
     let playAtActualSpeed:Bool
     public var loop:Bool
-    var previousFrameTime:CMTime?
+    public var startFrameTime:CMTime?
+    public var currentFrameTime:CMTime? {
+        get {
+            return self.lastFrameTime
+        }
+    }
     var currentThread:Thread?
-    var startFrameTime:CMTime?
+    var lastFrameTime:CMTime?
 
     var numberOfFramesCaptured = 0
     var totalFrameTimeDuringCapture:Double = 0.0
+    
+    var movieFramebuffer:Framebuffer?
     
     // TODO: Add movie reader synchronization
     // TODO: Someone will have to add back in the AVPlayerItem logic, because I don't know how that works
@@ -35,6 +42,7 @@ public class MovieInput: ImageSource {
     }
     
     deinit {
+        self.movieFramebuffer?.unlock()
         self.cancel()
     }
 
@@ -63,7 +71,7 @@ public class MovieInput: ImageSource {
     
     public func pause() {
         self.cancel()
-        self.startFrameTime = self.previousFrameTime
+        self.startFrameTime = self.lastFrameTime
     }
     
     // MARK: -
@@ -93,6 +101,7 @@ public class MovieInput: ImageSource {
                 assetReader.timeRange = CMTimeRange(start: startFrameTime, duration: kCMTimePositiveInfinity)
             }
             self.startFrameTime = nil
+            self.lastFrameTime = nil
             
             return assetReader
         } catch {
@@ -161,10 +170,10 @@ public class MovieInput: ImageSource {
                 let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
                 
                 // Retrieve the rolling frame rate (duration between each frame)
-                let frameDuration = CMTimeSubtract(currentSampleTime, self.previousFrameTime ?? kCMTimeZero)
+                let frameDuration = CMTimeSubtract(currentSampleTime, self.lastFrameTime ?? CMTimeAdd(currentSampleTime, CMTime(value: 1, timescale: 30)))
                 frameDurationNanos = CMTimeGetSeconds(frameDuration) * 1_000_000_000
                 
-                self.previousFrameTime = currentSampleTime
+                self.lastFrameTime = currentSampleTime
             }
             
             sharedImageProcessingContext.runOperationSynchronously{
@@ -276,13 +285,17 @@ public class MovieInput: ImageSource {
         
         chrominanceFramebuffer.lock()
         
+        self.movieFramebuffer?.unlock()
         let movieFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:GLSize(width:GLint(bufferWidth), height:GLint(bufferHeight)), textureOnly:false)
+        movieFramebuffer.lock()
         movieFramebuffer.sampleTime = withSampleTime
         
         convertYUVToRGB(shader:self.yuvConversionShader, luminanceFramebuffer:luminanceFramebuffer, chrominanceFramebuffer:chrominanceFramebuffer, resultFramebuffer:movieFramebuffer, colorConversionMatrix:conversionMatrix)
         CVPixelBufferUnlockBaseAddress(movieFrame, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
         
         movieFramebuffer.timingStyle = .videoFrame(timestamp:Timestamp(withSampleTime))
+        self.movieFramebuffer = movieFramebuffer
+        
         self.updateTargetsWithFramebuffer(movieFramebuffer)
         
         if self.runBenchmark {
@@ -296,6 +309,14 @@ public class MovieInput: ImageSource {
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
         // Not needed for movie inputs
+    }
+    
+    public func reprocessLastFrame() {
+        sharedImageProcessingContext.runOperationAsynchronously {
+            if let movieFramebuffer = self.movieFramebuffer {
+                self.updateTargetsWithFramebuffer(movieFramebuffer)
+            }
+        }
     }
     
     // MARK: -

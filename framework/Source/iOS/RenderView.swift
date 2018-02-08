@@ -83,19 +83,7 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     func createDisplayFramebuffer() -> Bool {
-        // Prevent the first frame from prematurely drawing before the view is drawn to the screen at the right size
-        // Aka we want to briefly synchronize UIKit with OpenGL. OpenGL draws immediately but UIKit draws in cycles.
-        // Note: We have to wait for the transaction to finish before we disable this (aka for the drawing cycle to finish)
-        // we can't just disable presentsWithTransaction after the first frame because it may even take a couple frames for
-        // a UIKit drawing cycle to complete (rarely but sometimes)
-        // Without this you will get weird content flashes when switching between videos of different size
-        // since the content will be drawn into a view that which although has the right frame/bounds it is not
-        // yet actually reflected on the screen. OpenGL would just draw right into the wrongly displayed view
-        // as soon as presentBufferForDisplay() is called.
-        // Source --> https://stackoverflow.com/a/30722276/1275014
-        // Source --> https://developer.apple.com/documentation/quartzcore/caeagllayer/1618676-presentswithtransaction
-        self.presentWithTransaction()
-        
+        sharedImageProcessingContext.makeCurrentContext()
         var newDisplayFramebuffer:GLuint = 0
         glGenFramebuffers(1, &newDisplayFramebuffer)
         displayFramebuffer = newDisplayFramebuffer
@@ -114,8 +102,12 @@ public class RenderView:UIView, ImageConsumer {
         glGetRenderbufferParameteriv(GLenum(GL_RENDERBUFFER), GLenum(GL_RENDERBUFFER_HEIGHT), &backingHeight)
         backingSize = GLSize(width:backingWidth, height:backingHeight)
         
-        guard ((backingWidth > 0) && (backingHeight > 0)) else {
+        guard (backingWidth > 0 && backingHeight > 0) else {
             print("Warning: View had a zero size")
+            
+            if(self.internalLayer.bounds.width > 0 && self.internalLayer.bounds.height > 0) {
+                print("Warning: View size \(self.internalLayer.bounds) may be too large ")
+            }
             return false
         }
         
@@ -126,6 +118,19 @@ public class RenderView:UIView, ImageConsumer {
             print("Warning: Display framebuffer creation failed with error: \(FramebufferCreationError(errorCode:status))")
             return false
         }
+        
+        // Prevent the first frame from prematurely drawing before the view is drawn to the screen at the right size
+        // Aka we want to briefly synchronize UIKit with OpenGL. OpenGL draws immediately but UIKit draws in cycles.
+        // Note: We have to wait for the transaction to finish (aka for the drawing cycle to finish) before we disable this
+        // we can't just disable presentsWithTransaction after the first frame because it may even take a couple frames for
+        // a UIKit drawing cycle to complete (rarely but sometimes)
+        // Without this you will get weird content flashes when switching between videos of different size
+        // since the content will be drawn into a view that which although has the right frame/bounds it is not
+        // yet actually reflected on the screen. OpenGL would just draw right into the wrongly displayed view
+        // as soon as presentBufferForDisplay() is called.
+        // Source --> https://stackoverflow.com/a/30722276/1275014
+        // Source --> https://developer.apple.com/documentation/quartzcore/caeagllayer/1618676-presentswithtransaction
+        self.presentWithTransaction()
         
         return true
     }
