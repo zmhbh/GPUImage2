@@ -3,6 +3,8 @@ import AVFoundation
 extension String: Error {}
 
 public protocol AudioEncodingTarget {
+    var shouldInvalidateAudioSampleWhenDone: Bool { get set }
+    
     func activateAudioTrack()
     func processAudioBuffer(_ sampleBuffer:CMSampleBuffer)
 }
@@ -10,6 +12,8 @@ public protocol AudioEncodingTarget {
 public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     public let sources = SourceContainer()
     public let maximumInputs:UInt = 1
+    
+    public var shouldInvalidateAudioSampleWhenDone: Bool = false
     
     let assetWriter:AVAssetWriter
     let assetWriterVideoInput:AVAssetWriterInput
@@ -273,6 +277,12 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         guard let assetWriterAudioInput = assetWriterAudioInput else { return }
         
         movieProcessingContext.runOperationAsynchronously{
+            defer {
+                if(self.shouldInvalidateAudioSampleWhenDone) {
+                    CMSampleBufferInvalidate(sampleBuffer)
+                }
+            }
+            
             guard self.isRecording else { return }
             guard self.assetWriter.status == .writing else { return }
             guard !self.audioEncodingIsFinished else { return }

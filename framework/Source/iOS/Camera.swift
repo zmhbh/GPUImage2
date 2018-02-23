@@ -50,10 +50,11 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public var logFPS:Bool = false
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
-            guard let audioEncodingTarget = audioEncodingTarget else {
+            guard var audioEncodingTarget = audioEncodingTarget else {
                 //self.removeAudioInputsAndOutputs()
                 return
             }
+            audioEncodingTarget.shouldInvalidateAudioSampleWhenDone = false
             do {
                 try self.addAudioInputsAndOutputs()
                 audioEncodingTarget.activateAudioTrack()

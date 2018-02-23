@@ -4,19 +4,32 @@ public class MovieInput: ImageSource {
     public let targets = TargetContainer()
     public var runBenchmark = false
     
+    public var audioEncodingTarget:AudioEncodingTarget? {
+        didSet {
+            guard var audioEncodingTarget = audioEncodingTarget else {
+                return
+            }
+            audioEncodingTarget.shouldInvalidateAudioSampleWhenDone = true
+            audioEncodingTarget.activateAudioTrack()
+        }
+    }
+    
     let yuvConversionShader:ShaderProgram
     let asset:AVAsset
     let videoComposition:AVVideoComposition?
     let playAtActualSpeed:Bool
     public var loop:Bool
-    public var startFrameTime:CMTime?
+    var startFrameTime:CMTime?
     public var currentFrameTime:CMTime? {
         get {
             return self.lastFrameTime
         }
     }
-    var currentThread:Thread?
     var lastFrameTime:CMTime?
+    
+    public var useRealtimeThreads = false
+    var timebaseInfo = mach_timebase_info_data_t()
+    var currentThread:Thread?
 
     var numberOfFramesCaptured = 0
     var totalFrameTimeDuringCapture:Double = 0.0
@@ -31,8 +44,6 @@ public class MovieInput: ImageSource {
         self.playAtActualSpeed = playAtActualSpeed
         self.loop = loop
         self.yuvConversionShader = crashOnShaderCompileFailure("MovieInput"){try sharedImageProcessingContext.programForVertexShader(defaultVertexShaderForInputs(2), fragmentShader:YUVConversionFullRangeFragmentShader)}
-        
-        // TODO: Audio here
     }
 
     public convenience init(url:URL, playAtActualSpeed:Bool = false, loop:Bool = false) throws {
@@ -49,7 +60,12 @@ public class MovieInput: ImageSource {
     // MARK: -
     // MARK: Playback control
     // Only call these methods from the main thread
-
+    
+    public func start(atTime: CMTime? = nil) {
+        self.startFrameTime = atTime
+        self.start()
+    }
+    
     @objc public func start() {
         if let currentThread = self.currentThread,
             currentThread.isExecuting,
@@ -57,7 +73,7 @@ public class MovieInput: ImageSource {
             // If the current thread is running and has not been cancelled, bail.
             return
         }
-        // Just to be safe.
+        // Cancel the thread just to be safe incase we somehow get here with the thread still running
         self.currentThread?.cancel()
         
         self.currentThread = Thread(target: self, selector: #selector(beginReading), object: nil)
@@ -97,6 +113,13 @@ public class MovieInput: ImageSource {
                 assetReader.add(readerVideoTrackOutput)
             }
             
+            if let audioTrack = self.asset.tracks(withMediaType: AVMediaTypeAudio).first,
+                let _ = self.audioEncodingTarget {
+                let readerAudioTrackOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
+                readerAudioTrackOutput.alwaysCopiesSampleData = false
+                assetReader.add(readerAudioTrackOutput)
+            }
+            
             if let startFrameTime = self.startFrameTime {
                 assetReader.timeRange = CMTimeRange(start: startFrameTime, duration: kCMTimePositiveInfinity)
             }
@@ -105,7 +128,7 @@ public class MovieInput: ImageSource {
             
             return assetReader
         } catch {
-            print("Could not create asset reader: \(error)")
+            print("ERROR: Unable to create asset reader: \(error)")
         }
         return nil
     }
@@ -113,7 +136,13 @@ public class MovieInput: ImageSource {
     @objc func beginReading() {
         let thread = Thread.current
         
-        self.configureThread()
+        mach_timebase_info(&timebaseInfo)
+        if(useRealtimeThreads) {
+            self.configureThread()
+        }
+        else {
+            thread.qualityOfService = .userInteractive
+        }
         
         guard let assetReader = self.createReader() else {
             return // A return statement will end thread execution
@@ -122,32 +151,37 @@ public class MovieInput: ImageSource {
         do {
             try ObjC.catchException {
                 guard assetReader.startReading() else {
-                    print("Couldn't start reading: \(assetReader.error)")
+                    print("ERROR: Unable to start reading: \(assetReader.error)")
                     return
                 }
             }
         }
         catch {
-            print("Couldn't start reading: \(error)")
+            print("ERROR: Unable to start reading: \(error)")
             return
         }
         
-        var readerVideoTrackOutput:AVAssetReaderOutput? = nil;
+        var readerVideoTrackOutput:AVAssetReaderOutput? = nil
+        var readerAudioTrackOutput:AVAssetReaderOutput? = nil
         
         for output in assetReader.outputs {
             if(output.mediaType == AVMediaTypeVideo) {
                 readerVideoTrackOutput = output
+            }
+            if(output.mediaType == AVMediaTypeAudio) {
+                readerAudioTrackOutput = output
             }
         }
         
         while(assetReader.status == .reading) {
             if(thread.isCancelled) { break }
             self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
+            if let readerAudioTrackOutput = readerAudioTrackOutput { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
         }
         
         assetReader.cancelReading()
         
-        // Since only the main thread will cancel threads
+        // Since only the main thread will cancel and create threads
         // jump onto the main thead to prevent the current thread from being cancelled
         // in between the below if statement check and creating the new thread
         DispatchQueue.main.async {
@@ -160,47 +194,49 @@ public class MovieInput: ImageSource {
     }
     
     func readNextVideoFrame(with assetReader: AVAssetReader, from videoTrackOutput:AVAssetReaderOutput) {
-        if let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() {
+        guard let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() else { return }
             
-            let renderStart = DispatchTime.now()
-            var frameDurationNanos: Float64 = 0
+        let renderStart = DispatchTime.now()
+        var frameDurationNanos: Float64 = 0
+        
+        if (self.playAtActualSpeed) {
+            // Sample time eg. first frame is 0,30 second frame is 1,30
+            let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
+            // Retrieve the rolling frame rate (duration between each frame)
+            let frameDuration = CMTimeSubtract(currentSampleTime, self.lastFrameTime ?? CMTimeAdd(currentSampleTime, CMTime(value: 1, timescale: 30)))
+            frameDurationNanos = CMTimeGetSeconds(frameDuration) * 1_000_000_000
             
-            if (self.playAtActualSpeed) {
-                // Sample time eg. first frame is 0,30 second frame is 1,30
-                let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
-                
-                // Retrieve the rolling frame rate (duration between each frame)
-                let frameDuration = CMTimeSubtract(currentSampleTime, self.lastFrameTime ?? CMTimeAdd(currentSampleTime, CMTime(value: 1, timescale: 30)))
-                frameDurationNanos = CMTimeGetSeconds(frameDuration) * 1_000_000_000
-                
-                self.lastFrameTime = currentSampleTime
-            }
+            self.lastFrameTime = currentSampleTime
+        }
+        
+        sharedImageProcessingContext.runOperationSynchronously{
+            self.process(movieFrame:sampleBuffer)
+            CMSampleBufferInvalidate(sampleBuffer)
+        }
+        
+        if(self.playAtActualSpeed) {
+            let renderEnd = DispatchTime.now()
+            // Find the amount of time it took to display the last frame
+            let renderDurationNanos = Double(renderEnd.uptimeNanoseconds - renderStart.uptimeNanoseconds)
+            // Find how much time we should wait to display the next frame. So it would be the frame duration minus the
+            // amount of time we already spent rendering the current frame.
+            let waitDurationNanos = Int(frameDurationNanos - renderDurationNanos)
             
-            sharedImageProcessingContext.runOperationSynchronously{
-                self.process(movieFrame:sampleBuffer)
-                CMSampleBufferInvalidate(sampleBuffer)
-            }
+            // When the wait duration begins returning negative values consistently
+            // It means the OS is unable to provide enough processing time for the above work
+            // and that you need to adjust the real time thread policy below
+            //print("Render duration: \(String(format: "%.4f",renderDurationNanos / 1_000_000)) ms Wait duration: \(String(format: "%.4f",Double(waitDurationNanos) / 1_000_000)) ms")
             
-            if(self.playAtActualSpeed) {
-                let renderEnd = DispatchTime.now()
-                
-                // Find the amount of time it took to display the last frame
-                let renderDurationNanos = Double(renderEnd.uptimeNanoseconds - renderStart.uptimeNanoseconds)
-                
-                // Find how much time we should wait to display the next frame. So it would be the frame duration minus the
-                // amount of time we already spent rendering the current frame.
-                let waitDurationNanos = Int(frameDurationNanos - renderDurationNanos)
-                
-                // When the wait duration begins returning negative values consistently
-                // It means the OS is unable to provide enough processing time for the above work
-                // and that you need to adjust the real time thread policy below
-                //print("Render duration: \(String(format: "%.4f",renderDurationNanos / 1_000_000)) ms Wait duration: \(String(format: "%.4f",Double(waitDurationNanos) / 1_000_000)) ms")
-                
-                if(waitDurationNanos > 0) {
-                    mach_wait_until(mach_absolute_time()+self.nanosToAbs(UInt64(waitDurationNanos)))
-                }
+            if(waitDurationNanos > 0) {
+                mach_wait_until(mach_absolute_time()+self.nanosToAbs(UInt64(waitDurationNanos)))
             }
         }
+    }
+    
+    func readNextAudioSample(with assetReader: AVAssetReader, from audioTrackOutput:AVAssetReaderOutput) {
+        guard let sampleBuffer = audioTrackOutput.copyNextSampleBuffer() else { return }
+        
+        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer)
     }
     
     func process(movieFrame frame:CMSampleBuffer) {
@@ -210,8 +246,6 @@ public class MovieInput: ImageSource {
         self.process(movieFrame:movieFrame, withSampleTime:currentSampleTime)
     }
     
-    
-    //Code from pull request https://github.com/BradLarson/GPUImage2/pull/183
     func process(movieFrame:CVPixelBuffer, withSampleTime:CMTime) {
         let bufferHeight = CVPixelBufferGetHeight(movieFrame)
         let bufferWidth = CVPixelBufferGetWidth(movieFrame)
@@ -256,8 +290,6 @@ public class MovieInput: ImageSource {
             return
         }
         
-        luminanceFramebuffer.lock()
-        
         var chrominanceGLTexture: CVOpenGLESTexture?
         
         glActiveTexture(GLenum(GL_TEXTURE1))
@@ -282,8 +314,6 @@ public class MovieInput: ImageSource {
             print("Could not create a framebuffer of the size (\(bufferWidth), \(bufferHeight)), error: \(error)")
             return
         }
-        
-        chrominanceFramebuffer.lock()
         
         self.movieFramebuffer?.unlock()
         let movieFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:GLSize(width:GLint(bufferWidth), height:GLint(bufferHeight)), textureOnly:false)
@@ -322,10 +352,7 @@ public class MovieInput: ImageSource {
     // MARK: -
     // MARK: Thread configuration
     
-    var timebaseInfo = mach_timebase_info_data_t()
-    
     func configureThread() {
-        mach_timebase_info(&timebaseInfo)
         let clock2abs = Double(timebaseInfo.denom) / Double(timebaseInfo.numer) * Double(NSEC_PER_MSEC)
         
         // http://docs.huihoo.com/darwin/kernel-programming-guide/scheduler/chapter_8_section_4.html
