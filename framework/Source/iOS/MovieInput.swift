@@ -4,6 +4,8 @@ public protocol MovieInputDelegate: class {
     func didFinishMovie()
 }
 
+let synchronizedEncodingDebug = false
+
 public class MovieInput: ImageSource {
     public let targets = TargetContainer()
     public var runBenchmark = false
@@ -17,13 +19,16 @@ public class MovieInput: ImageSource {
             }
             audioEncodingTarget.shouldInvalidateAudioSampleWhenDone = true
             audioEncodingTarget.activateAudioTrack()
+            
+            // Call enableSyncronizedEncoding() again if they didn't set the audioEncodingTarget before setting synchronizedMovieOutput
+            if(synchronizedMovieOutput != nil) { self.enableSyncronizedEncoding() }
         }
     }
     
     let yuvConversionShader:ShaderProgram
     let asset:AVAsset
     let videoComposition:AVVideoComposition?
-    let playAtActualSpeed:Bool
+    var playAtActualSpeed:Bool
     var startFrameTime:CMTime?
     var lastFrameTime:CMTime?
     
@@ -35,16 +40,25 @@ public class MovieInput: ImageSource {
     }
     public var completion: (() -> Void)?
     
+    public var synchronizedMovieOutput:MovieOutput? {
+        didSet {
+            self.enableSyncronizedEncoding()
+        }
+    }
+    let conditionLock = NSCondition()
+    var readingShouldWait = false
+    var videoInputStatusObserver:NSKeyValueObservation?
+    var audioInputStatusObserver:NSKeyValueObservation?
+    
     public var useRealtimeThreads = false
     var timebaseInfo = mach_timebase_info_data_t()
     var currentThread:Thread?
-
+    
     var numberOfFramesCaptured = 0
     var totalFrameTimeDuringCapture:Double = 0.0
     
     var movieFramebuffer:Framebuffer?
     
-    // TODO: Add movie reader synchronization
     // TODO: Someone will have to add back in the AVPlayerItem logic, because I don't know how that works
     public init(asset:AVAsset, videoComposition: AVVideoComposition?, playAtActualSpeed:Bool = false, loop:Bool = false) throws {
         self.asset = asset
@@ -63,6 +77,9 @@ public class MovieInput: ImageSource {
     deinit {
         self.movieFramebuffer?.unlock()
         self.cancel()
+        
+        self.videoInputStatusObserver?.invalidate()
+        self.audioInputStatusObserver?.invalidate()
     }
 
     // MARK: -
@@ -148,12 +165,15 @@ public class MovieInput: ImageSource {
         if(useRealtimeThreads) {
             self.configureThread()
         }
-        else {
+        else if(playAtActualSpeed) {
             thread.qualityOfService = .userInteractive
+        }
+        else {
+            thread.qualityOfService = .default // Synchronized encoding
         }
         
         guard let assetReader = self.createReader() else {
-            return // A return statement will end thread execution
+            return // A return statement in this frame will end thread execution
         }
         
         do {
@@ -183,8 +203,28 @@ public class MovieInput: ImageSource {
         
         while(assetReader.status == .reading) {
             if(thread.isCancelled) { break }
-            self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
-            if let readerAudioTrackOutput = readerAudioTrackOutput { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
+            
+            if let movieOutput = self.synchronizedMovieOutput {
+                self.conditionLock.lock()
+                if(self.readingShouldWait) {
+                    if(synchronizedEncodingDebug) { print("Disable reading") }
+                    self.conditionLock.wait()
+                    if(synchronizedEncodingDebug) { print("Enable reading") }
+                }
+                self.conditionLock.unlock()
+                
+                if(movieOutput.assetWriterVideoInput.isReadyForMoreMediaData) {
+                    self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
+                }
+                if(movieOutput.assetWriterAudioInput?.isReadyForMoreMediaData ?? false) {
+                    if let readerAudioTrackOutput = readerAudioTrackOutput { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
+                }
+            }
+            else {
+                self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
+                if let readerAudioTrackOutput = readerAudioTrackOutput { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
+            }
+
         }
         
         assetReader.cancelReading()
@@ -200,13 +240,26 @@ public class MovieInput: ImageSource {
             else {
                 self.delegate?.didFinishMovie()
                 self.completion?()
+                
+                if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Synchronized encoding finished") }
             }
         }
     }
     
     func readNextVideoFrame(with assetReader: AVAssetReader, from videoTrackOutput:AVAssetReaderOutput) {
-        guard let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() else { return }
+        guard let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() else {
+            if let movieOutput = self.synchronizedMovieOutput {
+                movieOutput.movieProcessingContext.runOperationAsynchronously {
+                    movieOutput.videoEncodingIsFinished = true
+                    movieOutput.assetWriterVideoInput.markAsFinished()
+                }
+            }
             
+            return
+        }
+        
+        if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Process frame input") }
+        
         let renderStart = DispatchTime.now()
         var frameDurationNanos: Float64 = 0
         
@@ -245,7 +298,18 @@ public class MovieInput: ImageSource {
     }
     
     func readNextAudioSample(with assetReader: AVAssetReader, from audioTrackOutput:AVAssetReaderOutput) {
-        guard let sampleBuffer = audioTrackOutput.copyNextSampleBuffer() else { return }
+        guard let sampleBuffer = audioTrackOutput.copyNextSampleBuffer() else {
+            if let movieOutput = self.synchronizedMovieOutput {
+                movieOutput.movieProcessingContext.runOperationAsynchronously {
+                    movieOutput.audioEncodingIsFinished = true
+                    movieOutput.assetWriterAudioInput?.markAsFinished()
+                }
+            }
+            
+            return
+        }
+        
+        if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Process audio sample input") }
         
         self.audioEncodingTarget?.processAudioBuffer(sampleBuffer)
     }
@@ -357,6 +421,51 @@ public class MovieInput: ImageSource {
                 self.updateTargetsWithFramebuffer(movieFramebuffer)
             }
         }
+    }
+    
+    // MARK: -
+    // MARK: Syncronized encoding
+    
+    func enableSyncronizedEncoding() {
+        self.synchronizedMovieOutput?.encodingLiveVideo = false
+        self.playAtActualSpeed = false
+        self.loop = false
+        
+        // Subscribe to isReadyForMoreMediaData changes
+        self.setupObservers()
+        // Set the intial state of the lock
+        self.updateLock()
+    }
+    
+    func setupObservers() {
+        self.videoInputStatusObserver?.invalidate()
+        self.audioInputStatusObserver?.invalidate()
+        
+        guard let movieOutput = self.synchronizedMovieOutput else { return }
+        
+        self.videoInputStatusObserver = movieOutput.assetWriterVideoInput.observe(\.isReadyForMoreMediaData, options: [.new, .old]) { [weak self] (assetWriterVideoInput, change) in
+            guard let weakSelf = self else { return }
+            weakSelf.updateLock()
+        }
+        self.audioInputStatusObserver = movieOutput.assetWriterAudioInput?.observe(\.isReadyForMoreMediaData, options: [.new, .old]) { [weak self] (assetWriterAudioInput, change) in
+            guard let weakSelf = self else { return }
+            weakSelf.updateLock()
+        }
+    }
+    
+    func updateLock() {
+        guard let movieOutput = self.synchronizedMovieOutput else { return }
+        
+        self.conditionLock.lock()
+        // Allow reading if either input is able to accept data, prevent reading if both inputs are unable to accept data.
+        if(movieOutput.assetWriterVideoInput.isReadyForMoreMediaData || movieOutput.assetWriterAudioInput?.isReadyForMoreMediaData ?? false) {
+            self.readingShouldWait = false
+            self.conditionLock.signal()
+        }
+        else {
+            self.readingShouldWait = true
+        }
+        self.conditionLock.unlock()
     }
     
     // MARK: -

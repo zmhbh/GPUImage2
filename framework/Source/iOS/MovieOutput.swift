@@ -25,13 +25,18 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     private var isRecording = false
     private var isFinishing = false
     private var finishRecordingCompletionCallback:(() -> Void)? = nil
-    private var videoEncodingIsFinished = false
-    private var audioEncodingIsFinished = false
+    var videoEncodingIsFinished = false
+    var audioEncodingIsFinished = false
     private var startTime:CMTime?
     private var firstFrameTime: CMTime?
     private var previousFrameTime: CMTime?
     private var previousAudioTime: CMTime?
-    private var encodingLiveVideo:Bool
+    var encodingLiveVideo:Bool {
+        didSet {
+            assetWriterVideoInput.expectsMediaDataInRealTime = encodingLiveVideo
+            assetWriterAudioInput?.expectsMediaDataInRealTime = encodingLiveVideo
+        }
+    }
     var pixelBuffer:CVPixelBuffer? = nil
     var renderFramebuffer:Framebuffer!
     
@@ -192,13 +197,16 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         glFinish();
         
         movieProcessingContext.runOperationAsynchronously {
-            guard self.renderFramebuffer != nil else { return }
-            guard self.isRecording else { return }
-            guard self.assetWriter.status == .writing else { return }
-            guard !self.videoEncodingIsFinished else { return }
+            guard self.renderFramebuffer != nil,
+                self.isRecording,
+                self.assetWriter.status == .writing,
+                !self.videoEncodingIsFinished else { return }
             
             // Ignore still images and other non-video updates (do I still need this?)
-            guard let frameTime = framebuffer.timingStyle.timestamp?.asCMTime else { return }
+            guard let frameTime = framebuffer.timingStyle.timestamp?.asCMTime else {
+                return
+                
+            }
             
             // Check if we are finishing and if this frame is later than the last recorded audio buffer
             // Note: isFinishing is only set when there is an audio buffer, otherwise the video is finished immediately
@@ -211,7 +219,9 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             }
             
             // If two consecutive times with the same value are added to the movie, it aborts recording, so I bail on that case
-            guard (frameTime != self.previousFrameTime) else { return }
+            guard (frameTime != self.previousFrameTime) else {
+                return
+            }
             
             if (self.startTime == nil) {
                 self.assetWriter.startSession(atSourceTime: frameTime)
@@ -226,12 +236,21 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 return
             }
             
+            while(!self.assetWriterVideoInput.isReadyForMoreMediaData && !self.encodingLiveVideo && !self.videoEncodingIsFinished) {
+                if(synchronizedEncodingDebug) { print("Video waiting...") }
+                // Better to poll isReadyForMoreMediaData often since when it does become true
+                // we don't want to risk letting framebuffers pile up in between poll intervals.
+                usleep(100000) // 0.1 seconds
+            }
+            
             if !self.movieProcessingContext.supportsTextureCaches() {
                 let pixelBufferStatus = CVPixelBufferPoolCreatePixelBuffer(nil, self.assetWriterPixelBufferInput.pixelBufferPool!, &self.pixelBuffer)
                 guard ((self.pixelBuffer != nil) && (pixelBufferStatus == kCVReturnSuccess)) else { return }
             }
             
             self.renderIntoPixelBuffer(self.pixelBuffer!, framebuffer:framebuffer)
+            
+            if(synchronizedEncodingDebug) { print("Process frame output") }
             
             if (!self.assetWriterPixelBufferInput.append(self.pixelBuffer!, withPresentationTime:frameTime)) {
                 debugPrint("Problem appending pixel buffer at time: \(frameTime)")
@@ -278,16 +297,16 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     public func processAudioBuffer(_ sampleBuffer:CMSampleBuffer) {
         guard let assetWriterAudioInput = assetWriterAudioInput else { return }
         
-        movieProcessingContext.runOperationAsynchronously{
+        let work = {
             defer {
                 if(self.shouldInvalidateAudioSampleWhenDone) {
                     CMSampleBufferInvalidate(sampleBuffer)
                 }
             }
             
-            guard self.isRecording else { return }
-            guard self.assetWriter.status == .writing else { return }
-            guard !self.audioEncodingIsFinished else { return }
+            guard self.isRecording,
+                self.assetWriter.status == .writing,
+                !self.audioEncodingIsFinished else { return }
             
             let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
             
@@ -311,9 +330,23 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 return
             }
             
+            while(!assetWriterAudioInput.isReadyForMoreMediaData && !self.encodingLiveVideo && !self.audioEncodingIsFinished) {
+                if(synchronizedEncodingDebug) { print("Audio waiting...") }
+                usleep(100000)
+            }
+            
+            if(synchronizedEncodingDebug) { print("Process audio sample output") }
+            
             if (!assetWriterAudioInput.append(sampleBuffer)) {
                 print("Trouble appending audio sample buffer: \(self.assetWriter.error)")
             }
+        }
+        
+        if(self.encodingLiveVideo) {
+            movieProcessingContext.runOperationAsynchronously(work)
+        }
+        else {
+            work()
         }
     }
 }
