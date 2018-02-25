@@ -1,8 +1,14 @@
 import AVFoundation
 
+public protocol MovieInputDelegate: class {
+    func didFinishMovie()
+}
+
 public class MovieInput: ImageSource {
     public let targets = TargetContainer()
     public var runBenchmark = false
+    
+    public weak var delegate: MovieInputDelegate?
     
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
@@ -18,14 +24,16 @@ public class MovieInput: ImageSource {
     let asset:AVAsset
     let videoComposition:AVVideoComposition?
     let playAtActualSpeed:Bool
-    public var loop:Bool
     var startFrameTime:CMTime?
+    var lastFrameTime:CMTime?
+    
+    public var loop:Bool
     public var currentFrameTime:CMTime? {
         get {
             return self.lastFrameTime
         }
     }
-    var lastFrameTime:CMTime?
+    public var completion: (() -> Void)?
     
     public var useRealtimeThreads = false
     var timebaseInfo = mach_timebase_info_data_t()
@@ -59,9 +67,8 @@ public class MovieInput: ImageSource {
 
     // MARK: -
     // MARK: Playback control
-    // Only call these methods from the main thread
     
-    public func start(atTime: CMTime? = nil) {
+    public func start(atTime: CMTime) {
         self.startFrameTime = atTime
         self.start()
     }
@@ -73,7 +80,7 @@ public class MovieInput: ImageSource {
             // If the current thread is running and has not been cancelled, bail.
             return
         }
-        // Cancel the thread just to be safe incase we somehow get here with the thread still running
+        // Cancel the thread just to be safe in the event we somehow get here with the thread still running
         self.currentThread?.cancel()
         
         self.currentThread = Thread(target: self, selector: #selector(beginReading), object: nil)
@@ -102,7 +109,7 @@ public class MovieInput: ImageSource {
             let assetReader = try AVAssetReader.init(asset: self.asset)
             
             if(self.videoComposition == nil) {
-                let readerVideoTrackOutput = AVAssetReaderTrackOutput(track:self.asset.tracks(withMediaType: AVMediaTypeVideo)[0], outputSettings:outputSettings)
+                let readerVideoTrackOutput = AVAssetReaderTrackOutput(track: self.asset.tracks(withMediaType: AVMediaTypeVideo).first!, outputSettings:outputSettings)
                 readerVideoTrackOutput.alwaysCopiesSampleData = false
                 assetReader.add(readerVideoTrackOutput)
             }
@@ -137,6 +144,7 @@ public class MovieInput: ImageSource {
         let thread = Thread.current
         
         mach_timebase_info(&timebaseInfo)
+        
         if(useRealtimeThreads) {
             self.configureThread()
         }
@@ -181,14 +189,17 @@ public class MovieInput: ImageSource {
         
         assetReader.cancelReading()
         
-        // Since only the main thread will cancel and create threads
-        // jump onto the main thead to prevent the current thread from being cancelled
-        // in between the below if statement check and creating the new thread
+        // Since only the main thread will cancel and create threads jump onto it to prevent
+        // the current thread from being cancelled in between the below if statement and creating the new thread
         DispatchQueue.main.async {
             // Start the video over so long as it wasn't cancelled
             if (self.loop && !thread.isCancelled) {
                 self.currentThread = Thread(target: self, selector: #selector(self.beginReading), object: nil)
                 self.currentThread?.start()
+            }
+            else {
+                self.delegate?.didFinishMovie()
+                self.completion?()
             }
         }
     }
@@ -200,7 +211,7 @@ public class MovieInput: ImageSource {
         var frameDurationNanos: Float64 = 0
         
         if (self.playAtActualSpeed) {
-            // Sample time eg. first frame is 0,30 second frame is 1,30
+            // Sample time e.g. first frame is 0,30 second frame is 1,30
             let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
             // Retrieve the rolling frame rate (duration between each frame)
             let frameDuration = CMTimeSubtract(currentSampleTime, self.lastFrameTime ?? CMTimeAdd(currentSampleTime, CMTime(value: 1, timescale: 30)))
@@ -318,7 +329,6 @@ public class MovieInput: ImageSource {
         self.movieFramebuffer?.unlock()
         let movieFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:GLSize(width:GLint(bufferWidth), height:GLint(bufferHeight)), textureOnly:false)
         movieFramebuffer.lock()
-        movieFramebuffer.sampleTime = withSampleTime
         
         convertYUVToRGB(shader:self.yuvConversionShader, luminanceFramebuffer:luminanceFramebuffer, chrominanceFramebuffer:chrominanceFramebuffer, resultFramebuffer:movieFramebuffer, colorConversionMatrix:conversionMatrix)
         CVPixelBufferUnlockBaseAddress(movieFrame, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))

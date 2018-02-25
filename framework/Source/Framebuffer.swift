@@ -33,7 +33,7 @@ public enum FramebufferTimingStyle {
         }
     }
     
-    var timestamp:Timestamp? {
+    public var timestamp:Timestamp? {
         get {
             switch self {
                 case .stillImage: return nil
@@ -59,8 +59,6 @@ public class Framebuffer {
     let textureOverride:Bool
     
     unowned var context:OpenGLContext
-    
-    public var sampleTime: CMTime?
     
     public init(context:OpenGLContext, orientation:ImageOrientation, size:GLSize, textureOnly:Bool = false, minFilter:Int32 = GL_LINEAR, magFilter:Int32 = GL_LINEAR, wrapS:Int32 = GL_CLAMP_TO_EDGE, wrapT:Int32 = GL_CLAMP_TO_EDGE, internalFormat:Int32 = GL_RGBA, format:Int32 = GL_BGRA, type:Int32 = GL_UNSIGNED_BYTE, stencil:Bool = false, overriddenTexture:GLuint? = nil) throws {
         self.context = context

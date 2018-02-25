@@ -123,6 +123,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 
                 completionCallback?(true)
             } catch {
+                print("Unable to start recording: \(error)")
+                
                 self.assetWriter.cancelWriting()
                 self.isRecording = false
                 

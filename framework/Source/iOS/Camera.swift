@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 
-public protocol CameraDelegate {
+public protocol CameraDelegate: class {
     func didCaptureBuffer(_ sampleBuffer: CMSampleBuffer)
 }
 public enum PhysicalCameraLocation {
@@ -65,7 +65,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     }
     
     public let targets = TargetContainer()
-    public var delegate: CameraDelegate?
+    public weak var delegate: CameraDelegate?
     public let captureSession:AVCaptureSession
     public let inputCamera:AVCaptureDevice!
     let videoInput:AVCaptureDeviceInput!

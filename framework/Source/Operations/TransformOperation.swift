@@ -42,6 +42,7 @@ open class TransformOperation: BasicOperation {
     }
     
     func normalizedImageVerticesForAspectRatio(_ aspectRatio:Float) -> [GLfloat] {
+        // [TopLeft.x, TopLeft.y, TopRight.x, TopRight.y, BottomLeft.x, BottomLeft.y, BottomRight.x, BottomRight.y]
         if(anchorTopLeft) {
             return [0.0, 0.0, 1.0, 0.0, 0.0,  GLfloat(aspectRatio), 1.0,  GLfloat(aspectRatio)]
         }
