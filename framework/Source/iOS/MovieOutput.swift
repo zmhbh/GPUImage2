@@ -90,12 +90,12 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         
         movieProcessingContext.runOperationAsynchronously {
             do {
-                try ObjC.catchException {
+                try NSObject.catchException {
                     self.isRecording = self.assetWriter.startWriting()
                 }
                 
                 if(!self.isRecording) {
-                    throw "Could not start asset writer: \(self.assetWriter.error)"
+                    throw "Could not start asset writer: \(String(describing: self.assetWriter.error))"
                 }
                 
                 guard let pixelBufferPool = self.assetWriterPixelBufferInput.pixelBufferPool else {
@@ -338,7 +338,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             if(synchronizedEncodingDebug) { print("Process audio sample output") }
             
             if (!assetWriterAudioInput.append(sampleBuffer)) {
-                print("Trouble appending audio sample buffer: \(self.assetWriter.error)")
+                print("Trouble appending audio sample buffer: \(String(describing: self.assetWriter.error))")
             }
         }
         

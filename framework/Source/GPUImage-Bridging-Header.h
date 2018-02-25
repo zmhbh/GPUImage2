@@ -9,6 +9,6 @@
 #ifndef GPUImage_Bridging_Header_h
 #define GPUImage_Bridging_Header_h
 
-#import "ObjC.h"
+#import "NSObject+Exception.h"
 
 #endif /* GPUImage_Bridging_Header_h */

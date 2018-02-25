@@ -184,7 +184,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     }
     
     func captureSessionRuntimeError(note: NSNotification) {
-        print("Capture Session Runtime Error: \(note.userInfo)")
+        print("ERROR: Capture session runtime error: \(String(describing: note.userInfo))")
         if(self.captureSessionRestartAttempts < 1) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 self.startCapture()

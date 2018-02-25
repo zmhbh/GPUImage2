@@ -1,13 +1,14 @@
 //
-//  ObjC.m
+//  NSObject+Exception.m
 //  GPUImage2
 //
 //  Created by Josh Bernfeld on 11/23/17.
 //
+//  Source: https://stackoverflow.com/a/36454808/1275014
 
-#import "ObjC.h"
+#import "NSObject+Exception.h"
 
-@implementation ObjC
+@implementation NSObject (Exception)
 
 + (BOOL)catchException:(void(^)(void))tryBlock error:(__autoreleasing NSError **)error {
     @try {

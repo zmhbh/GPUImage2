@@ -177,9 +177,9 @@ public class MovieInput: ImageSource {
         }
         
         do {
-            try ObjC.catchException {
+            try NSObject.catchException {
                 guard assetReader.startReading() else {
-                    print("ERROR: Unable to start reading: \(assetReader.error)")
+                    print("ERROR: Unable to start reading: \(String(describing: assetReader.error))")
                     return
                 }
             }
@@ -224,7 +224,6 @@ public class MovieInput: ImageSource {
                 self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
                 if let readerAudioTrackOutput = readerAudioTrackOutput { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
             }
-
         }
         
         assetReader.cancelReading()
