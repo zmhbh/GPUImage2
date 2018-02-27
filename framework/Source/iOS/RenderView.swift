@@ -15,6 +15,8 @@ public class RenderView:UIView, ImageConsumer {
     public var orientation:ImageOrientation = .portrait
     public var sizeInPixels:Size { get { return Size(width:Float(frame.size.width * contentScaleFactor), height:Float(frame.size.height * contentScaleFactor))}}
     
+    public var shouldPresentWithTransaction = false
+    
     public let sources = SourceContainer()
     public let maximumInputs:UInt = 1
     var displayFramebuffer:GLuint?
@@ -94,6 +96,17 @@ public class RenderView:UIView, ImageConsumer {
         displayRenderbuffer = newDisplayRenderbuffer
         glBindRenderbuffer(GLenum(GL_RENDERBUFFER), displayRenderbuffer!)
         
+        // Without the flush I occasionally get a warning from UIKit on the camera renderView and
+        // when the warning comes in the renderView just stays black. This happens rarely but often enough to be a problem.
+        // I tried a transaction and it doesn't silence it and this is likely why --> http://danielkbx.com/post/108060601989/catransaction-flush
+        // This flush defeats the purpose of presentWithTransaction() so it should only be enabled when you need it.
+        // The idea with presentWithTransaction() is to be able to change the bounds of this renderView, then draw contents into it
+        // at the correct bounds without any blips in between. If you have this flush() in place it will force a layout pass in the middle of that
+        // causing the old contents to be briefly distorted while the new contents are yet to be drawn.
+        // That is why this shouldn't be used in media playback scenarios.
+        if(!shouldPresentWithTransaction) {
+            CATransaction.flush()
+        }
         sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.internalLayer)
         
         var backingWidth:GLint = 0
@@ -130,7 +143,9 @@ public class RenderView:UIView, ImageConsumer {
         // as soon as presentBufferForDisplay() is called.
         // Source --> https://stackoverflow.com/a/30722276/1275014
         // Source --> https://developer.apple.com/documentation/quartzcore/caeagllayer/1618676-presentswithtransaction
-        self.presentWithTransaction()
+        if(shouldPresentWithTransaction) {
+            self.presentWithTransaction()
+        }
         
         return true
     }

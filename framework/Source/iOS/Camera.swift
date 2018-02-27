@@ -51,10 +51,10 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
             guard var audioEncodingTarget = audioEncodingTarget else {
+                // Removing the audio inputs and outputs causes a black flash on the video output
                 //self.removeAudioInputsAndOutputs()
                 return
             }
-            audioEncodingTarget.shouldInvalidateAudioSampleWhenDone = false
             do {
                 try self.addAudioInputsAndOutputs()
                 audioEncodingTarget.activateAudioTrack()
@@ -72,7 +72,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public let videoOutput:AVCaptureVideoDataOutput!
     var microphone:AVCaptureDevice?
     var audioInput:AVCaptureDeviceInput?
-    var audioOutput:AVCaptureAudioDataOutput?
+    public var audioOutput:AVCaptureAudioDataOutput?
 
     var supportsFullYUVRange:Bool = false
     let captureAsYUV:Bool
@@ -350,6 +350,6 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     }
     
     func processAudioSampleBuffer(_ sampleBuffer:CMSampleBuffer) {
-        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer)
+        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer, shouldInvalidateSampleWhenDone: false)
     }
 }

@@ -17,11 +17,10 @@ public class MovieInput: ImageSource {
             guard var audioEncodingTarget = audioEncodingTarget else {
                 return
             }
-            audioEncodingTarget.shouldInvalidateAudioSampleWhenDone = true
             audioEncodingTarget.activateAudioTrack()
             
-            // Call enableSyncronizedEncoding() again if they didn't set the audioEncodingTarget before setting synchronizedMovieOutput
-            if(synchronizedMovieOutput != nil) { self.enableSyncronizedEncoding() }
+            // Call enableSynchronizedEncoding() again if they didn't set the audioEncodingTarget before setting synchronizedMovieOutput
+            if(synchronizedMovieOutput != nil) { self.enableSynchronizedEncoding() }
         }
     }
     
@@ -42,7 +41,7 @@ public class MovieInput: ImageSource {
     
     public var synchronizedMovieOutput:MovieOutput? {
         didSet {
-            self.enableSyncronizedEncoding()
+            self.enableSynchronizedEncoding()
         }
     }
     let conditionLock = NSCondition()
@@ -249,6 +248,8 @@ public class MovieInput: ImageSource {
         guard let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() else {
             if let movieOutput = self.synchronizedMovieOutput {
                 movieOutput.movieProcessingContext.runOperationAsynchronously {
+                    // Clients that are monitoring each input's readyForMoreMediaData value must call markAsFinished on an input when they are done appending buffers to it.
+                    // This is necessary to prevent other inputs from stalling, as they may otherwise wait forever for that input's media data, attempting to complete the ideal interleaving pattern.
                     movieOutput.videoEncodingIsFinished = true
                     movieOutput.assetWriterVideoInput.markAsFinished()
                 }
@@ -310,7 +311,7 @@ public class MovieInput: ImageSource {
         
         if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Process audio sample input") }
         
-        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer)
+        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer, shouldInvalidateSampleWhenDone: true)
     }
     
     func process(movieFrame frame:CMSampleBuffer) {
@@ -423,9 +424,9 @@ public class MovieInput: ImageSource {
     }
     
     // MARK: -
-    // MARK: Syncronized encoding
+    // MARK: Synchronized encoding
     
-    func enableSyncronizedEncoding() {
+    func enableSynchronizedEncoding() {
         self.synchronizedMovieOutput?.encodingLiveVideo = false
         self.playAtActualSpeed = false
         self.loop = false
