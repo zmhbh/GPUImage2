@@ -56,15 +56,18 @@ public class MovieInput: ImageSource {
     var numberOfFramesCaptured = 0
     var totalFrameTimeDuringCapture:Double = 0.0
     
+    var audioSettings:[String:Any]?
+    
     var movieFramebuffer:Framebuffer?
     
     // TODO: Someone will have to add back in the AVPlayerItem logic, because I don't know how that works
-    public init(asset:AVAsset, videoComposition: AVVideoComposition?, playAtActualSpeed:Bool = false, loop:Bool = false) throws {
+    public init(asset:AVAsset, videoComposition: AVVideoComposition?, playAtActualSpeed:Bool = false, loop:Bool = false, audioSettings:[String:Any]? = nil) throws {
         self.asset = asset
         self.videoComposition = videoComposition
         self.playAtActualSpeed = playAtActualSpeed
         self.loop = loop
         self.yuvConversionShader = crashOnShaderCompileFailure("MovieInput"){try sharedImageProcessingContext.programForVertexShader(defaultVertexShaderForInputs(2), fragmentShader:YUVConversionFullRangeFragmentShader)}
+        self.audioSettings = audioSettings
     }
 
     public convenience init(url:URL, playAtActualSpeed:Bool = false, loop:Bool = false) throws {
@@ -138,7 +141,7 @@ public class MovieInput: ImageSource {
             
             if let audioTrack = self.asset.tracks(withMediaType: AVMediaTypeAudio).first,
                 let _ = self.audioEncodingTarget {
-                let readerAudioTrackOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
+                let readerAudioTrackOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: audioSettings)
                 readerAudioTrackOutput.alwaysCopiesSampleData = false
                 assetReader.add(readerAudioTrackOutput)
             }

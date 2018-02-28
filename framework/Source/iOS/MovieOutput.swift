@@ -37,11 +37,10 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     var renderFramebuffer:Framebuffer!
     
     var audioSettings:[String:Any]? = nil
-    var shouldPassthroughAudio:Bool
     
     let movieProcessingContext:OpenGLContext
     
-    public init(URL:Foundation.URL, size:Size, fileType:String = AVFileTypeQuickTimeMovie, liveVideo:Bool = false, videoSettings:[String:Any]? = nil, audioSettings:[String:Any]? = nil, shouldPassthroughAudio:Bool = false) throws {
+    public init(URL:Foundation.URL, size:Size, fileType:String = AVFileTypeQuickTimeMovie, liveVideo:Bool = false, videoSettings:[String:Any]? = nil, audioSettings:[String:Any]? = nil) throws {
         imageProcessingShareGroup = sharedImageProcessingContext.context.sharegroup
         // Since we cannot access self before calling super, initialize here and not above
         let movieProcessingContext = OpenGLContext()
@@ -55,8 +54,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         self.size = size
         
         assetWriter = try AVAssetWriter(url:URL, fileType:fileType)
-        // Set this to make sure that a functional movie is produced, even if the recording is cut off mid-stream. Only the last second should be lost in that case.
-        assetWriter.movieFragmentInterval = CMTimeMakeWithSeconds(1.0, 1000)
+        // Set this to make sure that a functional movie is produced, even if the recording is cut off mid-stream. Only the last 1/4 second should be lost in that case.
+        assetWriter.movieFragmentInterval = CMTimeMakeWithSeconds(0.25, 1000)
         
         var localSettings:[String:Any]
         if let videoSettings = videoSettings {
@@ -82,7 +81,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         assetWriter.add(assetWriterVideoInput)
         
         self.audioSettings = audioSettings
-        self.shouldPassthroughAudio = shouldPassthroughAudio
         
         self.movieProcessingContext = movieProcessingContext
     }
@@ -90,19 +88,23 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     public func startRecording(_ completionCallback:((_ started: Bool) -> Void)? = nil) {
         startTime = nil
         
-        movieProcessingContext.runOperationAsynchronously {
+        // Don't do this work on the movieProcessingContext que so we don't block it.
+        // If it does get blocked framebuffers will pile up and after it is no longer blocked/this work has finished
+        // we will be able to accept framebuffers but the ones that piled up will come in too quickly resulting in most being dropped
+        DispatchQueue.global(qos: .utility).async {
             do {
+                var success = false
                 try NSObject.catchException {
-                    self.isRecording = self.assetWriter.startWriting()
+                    success = self.assetWriter.startWriting()
                 }
                 
-                if(!self.isRecording) {
+                if(!success) {
                     throw "Could not start asset writer: \(String(describing: self.assetWriter.error))"
                 }
                 
                 guard let pixelBufferPool = self.assetWriterPixelBufferInput.pixelBufferPool else {
-                    //When the pixelBufferPool returns nil, check the following:
-                    //https://stackoverflow.com/a/20110179/1275014
+                    // When the pixelBufferPool returns nil, check the following:
+                    // https://stackoverflow.com/a/20110179/1275014
                     throw "Pixel buffer pool was nil"
                 }
                 
@@ -121,19 +123,23 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
                 CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
                 
-                let bufferSize = GLSize(self.size)
-                var cachedTextureRef:CVOpenGLESTexture? = nil
-                let _ = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, self.movieProcessingContext.coreVideoTextureCache, pixelBuffer, nil, GLenum(GL_TEXTURE_2D), GL_RGBA, bufferSize.width, bufferSize.height, GLenum(GL_BGRA), GLenum(GL_UNSIGNED_BYTE), 0, &cachedTextureRef)
-                let cachedTexture = CVOpenGLESTextureGetName(cachedTextureRef!)
-                
-                self.renderFramebuffer = try Framebuffer(context:self.movieProcessingContext, orientation:.portrait, size:bufferSize, textureOnly:false, overriddenTexture:cachedTexture)
-                
-                completionCallback?(true)
+                // This work must be done on the movieProcessingContext since we access openGL
+                try self.movieProcessingContext.runOperationSynchronously {
+                    let bufferSize = GLSize(self.size)
+                    var cachedTextureRef:CVOpenGLESTexture? = nil
+                    let _ = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, self.movieProcessingContext.coreVideoTextureCache, pixelBuffer, nil, GLenum(GL_TEXTURE_2D), GL_RGBA, bufferSize.width, bufferSize.height, GLenum(GL_BGRA), GLenum(GL_UNSIGNED_BYTE), 0, &cachedTextureRef)
+                    let cachedTexture = CVOpenGLESTextureGetName(cachedTextureRef!)
+                    
+                    self.renderFramebuffer = try Framebuffer(context:self.movieProcessingContext, orientation:.portrait, size:bufferSize, textureOnly:false, overriddenTexture:cachedTexture)
+                    
+                    self.isRecording = true
+                    
+                    completionCallback?(true)
+                }
             } catch {
                 print("Unable to start recording: \(error)")
                 
                 self.assetWriter.cancelWriting()
-                self.isRecording = false
                 
                 completionCallback?(false)
             }
@@ -151,46 +157,46 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             }
             
             self.finishRecordingCompletionCallback = completionCallback
-
-            self.finishAudioWriting()
             
-            // Check if there was audio
-            if(self.previousAudioTime != nil) {
-                // Video will finish once a there is a frame time that is later than the last recorded audio buffer time
-                self.isFinishing = true
+            self.audioEncodingIsFinished = true
+            
+            // Check that there was audio and that this is live video
+            if let previousAudioTime = self.previousAudioTime,
+                self.encodingLiveVideo {
                 
-                // Call finishVideoWriting just incase we don't recieve any additional audio buffers
-                self.movieProcessingContext.serialDispatchQueue.asyncAfter(deadline: .now() + 0.1) {
-                    self.finishVideoWriting()
+                // Check if the last frame is later than the last recorded audio buffer
+                if let previousFrameTime = self.previousFrameTime,
+                    CMTimeCompare(previousAudioTime, previousFrameTime) == -1 {
+                    // Finish immediately
+                    self.finishWriting()
+                }
+                else {
+                    // Video will finish once a there is a frame time that is later than the last recorded audio buffer time
+                    self.isFinishing = true
+                    
+                    // Finish after a delay just incase we don't recieve any additional audio buffers
+                    self.movieProcessingContext.serialDispatchQueue.asyncAfter(deadline: .now() + 0.1) {
+                        self.finishWriting()
+                    }
                 }
             }
             else {
-                // We can finish immediately since there is no audio
-                self.finishVideoWriting()
+                // Finish immediately since there is no audio
+                self.finishWriting()
             }
         }
     }
     
-    private func finishVideoWriting() {
+    private func finishWriting() {
         guard self.isRecording else { return }
         
         self.isFinishing = false
         self.isRecording = false
         
-        if (self.assetWriter.status == .writing && !self.videoEncodingIsFinished) {
-            self.videoEncodingIsFinished = true
-            self.assetWriterVideoInput.markAsFinished()
-        }
+        self.videoEncodingIsFinished = true
         
         self.assetWriter.finishWriting {
             self.finishRecordingCompletionCallback?()
-        }
-    }
-    
-    private func finishAudioWriting() {
-        if (self.assetWriter.status == .writing && !self.audioEncodingIsFinished) {
-            self.audioEncodingIsFinished = true
-            self.assetWriterAudioInput?.markAsFinished()
         }
     }
     
@@ -198,8 +204,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         glFinish();
         
         movieProcessingContext.runOperationAsynchronously {
-            guard self.renderFramebuffer != nil,
-                self.isRecording,
+            guard self.isRecording,
                 self.assetWriter.status == .writing,
                 !self.videoEncodingIsFinished else { return }
             
@@ -211,8 +216,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             if self.isFinishing,
                 let previousAudioTime = self.previousAudioTime,
                 CMTimeCompare(previousAudioTime, frameTime) == -1 {
-                // Finish recording
-                self.finishVideoWriting()
+                self.finishWriting()
                 return
             }
             
@@ -227,7 +231,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             
             self.previousFrameTime = frameTime
 
-            guard (self.assetWriterVideoInput.isReadyForMoreMediaData || (!self.encodingLiveVideo)) else {
+            guard (self.assetWriterVideoInput.isReadyForMoreMediaData || !self.encodingLiveVideo) else {
                 debugPrint("Had to drop a frame at time \(frameTime)")
                 return
             }
@@ -284,27 +288,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     // MARK: Audio support
     
     public func activateAudioTrack() {
-        var settings:[String:Any]? = nil
-        if let audioSettings = self.audioSettings {
-            settings = audioSettings
-        }
-        else {
-            var acl = AudioChannelLayout()
-            memset(&acl, 0, MemoryLayout<AudioChannelLayout>.size)
-            acl.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
-            
-            settings = [
-                AVFormatIDKey:kAudioFormatMPEG4AAC,
-                AVNumberOfChannelsKey:2,
-                AVSampleRateKey:AVAudioSession.sharedInstance().sampleRate,
-                AVChannelLayoutKey:NSData(bytes:&acl, length:MemoryLayout<AudioChannelLayout>.size),
-                AVEncoderBitRateKey:64000
-            ]
-        }
-        
-        if(shouldPassthroughAudio) { settings = nil }
-        
-        assetWriterAudioInput = AVAssetWriterInput(mediaType:AVMediaTypeAudio, outputSettings:settings)
+        assetWriterAudioInput = AVAssetWriterInput(mediaType:AVMediaTypeAudio, outputSettings:self.audioSettings)
         assetWriter.add(assetWriterAudioInput!)
         assetWriterAudioInput?.expectsMediaDataInRealTime = encodingLiveVideo
     }
@@ -325,14 +309,13 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
             
             if let firstFrameTime = self.firstFrameTime {
-                // Check if the time of this audio sample is before the time of the first frame
-                // If so then ignore it
+                // If the time of this audio sample is before the time of the first frame ignore it
                 if (CMTimeCompare(currentSampleTime, firstFrameTime) == -1) {
                     return
                 }
             }
             else {
-                // We have not recorded any video yet, so we do not know if this audio sample
+                // We have not recorded any video yet so we do not know if this audio sample
                 // falls before or after the time of the first frame which has not yet come in.
                 // There may be a better solution for this case
                 return
@@ -340,7 +323,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             
             self.previousAudioTime = currentSampleTime
             
-            guard (assetWriterAudioInput.isReadyForMoreMediaData || (!self.encodingLiveVideo)) else {
+            guard (assetWriterAudioInput.isReadyForMoreMediaData || !self.encodingLiveVideo) else {
+                debugPrint("Had to drop a audio sample at time \(currentSampleTime)")
                 return
             }
             
