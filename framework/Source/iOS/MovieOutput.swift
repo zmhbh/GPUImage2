@@ -19,14 +19,9 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     let size:Size
     let colorSwizzlingShader:ShaderProgram
     private var isRecording = false
-    private var isFinishing = false
-    private var finishRecordingCompletionCallback:(() -> Void)? = nil
     var videoEncodingIsFinished = false
     var audioEncodingIsFinished = false
-    private var startTime:CMTime?
-    private var firstFrameTime: CMTime?
     private var previousFrameTime: CMTime?
-    private var previousAudioTime: CMTime?
     var encodingLiveVideo:Bool {
         didSet {
             assetWriterVideoInput.expectsMediaDataInRealTime = encodingLiveVideo
@@ -86,8 +81,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     }
     
     public func startRecording(_ completionCallback:((_ started: Bool) -> Void)? = nil) {
-        startTime = nil
-        
         // Don't do this work on the movieProcessingContext que so we don't block it.
         // If it does get blocked framebuffers will pile up and after it is no longer blocked/this work has finished
         // we will be able to accept framebuffers but the ones that piled up will come in too quickly resulting in most being dropped
@@ -144,59 +137,30 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 completionCallback?(false)
             }
         }
-        
     }
     
     public func finishRecording(_ completionCallback:(() -> Void)? = nil) {
         movieProcessingContext.runOperationAsynchronously{
             guard self.isRecording,
-                !self.isFinishing,
                 self.assetWriter.status == .writing else {
                     completionCallback?()
                     return
             }
             
-            self.finishRecordingCompletionCallback = completionCallback
-            
             self.audioEncodingIsFinished = true
+            self.videoEncodingIsFinished = true
             
-            // Check that there was audio and that this is live video
-            if let previousAudioTime = self.previousAudioTime,
-                self.encodingLiveVideo {
-                
-                // Check if the last frame is later than the last recorded audio buffer
-                if let previousFrameTime = self.previousFrameTime,
-                    CMTimeCompare(previousAudioTime, previousFrameTime) == -1 {
-                    // Finish immediately
-                    self.finishWriting()
-                }
-                else {
-                    // Video will finish once a there is a frame time that is later than the last recorded audio buffer time
-                    self.isFinishing = true
-                    
-                    // Finish after a delay just incase we don't recieve any additional audio buffers
-                    self.movieProcessingContext.serialDispatchQueue.asyncAfter(deadline: .now() + 0.1) {
-                        self.finishWriting()
-                    }
-                }
+            self.isRecording = false
+            
+            if let lastFrame = self.previousFrameTime {
+                // Resolve black frames at the end. If we only call finishWriting() the session's effective end time
+                // will be the latest end timestamp of the session's samples which could be either video or audio
+                self.assetWriter.endSession(atSourceTime: lastFrame)
             }
-            else {
-                // Finish immediately since there is no audio
-                self.finishWriting()
+            
+            self.assetWriter.finishWriting {
+                completionCallback?()
             }
-        }
-    }
-    
-    private func finishWriting() {
-        guard self.isRecording else { return }
-        
-        self.isFinishing = false
-        self.isRecording = false
-        
-        self.videoEncodingIsFinished = true
-        
-        self.assetWriter.finishWriting {
-            self.finishRecordingCompletionCallback?()
         }
     }
     
@@ -211,22 +175,12 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             // Ignore still images and other non-video updates (do I still need this?)
             guard let frameTime = framebuffer.timingStyle.timestamp?.asCMTime else { return }
             
-            // Check if we are finishing and if this frame is later than the last recorded audio buffer
-            // Note: isFinishing is only set when there is an audio buffer, otherwise the video is finished immediately
-            if self.isFinishing,
-                let previousAudioTime = self.previousAudioTime,
-                CMTimeCompare(previousAudioTime, frameTime) == -1 {
-                self.finishWriting()
-                return
-            }
-            
             // If two consecutive times with the same value are added to the movie, it aborts recording, so I bail on that case
             guard (frameTime != self.previousFrameTime) else { return }
             
-            if (self.startTime == nil) {
+            if (self.previousFrameTime == nil) {
+                // This resolves black frames at the beginning. Any samples recieved before this time will be edited out
                 self.assetWriter.startSession(atSourceTime: frameTime)
-                self.startTime = frameTime
-                self.firstFrameTime = frameTime
             }
             
             self.previousFrameTime = frameTime
@@ -307,21 +261,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 let assetWriterAudioInput = self.assetWriterAudioInput else { return }
             
             let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
-            
-            if let firstFrameTime = self.firstFrameTime {
-                // If the time of this audio sample is before the time of the first frame ignore it
-                if (CMTimeCompare(currentSampleTime, firstFrameTime) == -1) {
-                    return
-                }
-            }
-            else {
-                // We have not recorded any video yet so we do not know if this audio sample
-                // falls before or after the time of the first frame which has not yet come in.
-                // There may be a better solution for this case
-                return
-            }
-            
-            self.previousAudioTime = currentSampleTime
             
             guard (assetWriterAudioInput.isReadyForMoreMediaData || !self.encodingLiveVideo) else {
                 debugPrint("Had to drop a audio sample at time \(currentSampleTime)")
