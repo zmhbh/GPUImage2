@@ -11,7 +11,7 @@ import Foundation
 import AudioToolbox
 import AVFoundation
 
-class SpeakerOutput: AudioEncodingTarget {
+public class SpeakerOutput: AudioEncodingTarget {
     
     public var changesAudioSession = true
     
@@ -81,7 +81,7 @@ class SpeakerOutput: AudioEncodingTarget {
     // MARK: -
     // MARK: AudioEncodingTarget protocol
     
-    func activateAudioTrack() {
+    public func activateAudioTrack() {
         if(changesAudioSession) {
             do {
                 try AVAudioSession.sharedInstance().setCategory(AVAudioSessionCategoryAmbient)
@@ -168,7 +168,7 @@ class SpeakerOutput: AudioEncodingTarget {
         hasBuffer = false
     }
     
-    func processAudioBuffer(_ sampleBuffer: CMSampleBuffer, shouldInvalidateSampleWhenDone: Bool) {
+    public func processAudioBuffer(_ sampleBuffer: CMSampleBuffer, shouldInvalidateSampleWhenDone: Bool) {
         defer {
             if(shouldInvalidateSampleWhenDone) {
                 CMSampleBufferInvalidate(sampleBuffer)
@@ -231,7 +231,7 @@ class SpeakerOutput: AudioEncodingTarget {
         }
     }
     
-    func readyForNextAudioBuffer() -> Bool {
+    public func readyForNextAudioBuffer() -> Bool {
         return isReadyForMoreMediaData
     }
     

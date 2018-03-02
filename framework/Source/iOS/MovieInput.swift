@@ -272,7 +272,7 @@ public class MovieInput: ImageSource {
             
             // Determine how much time we need to wait in order to catch up to the current time relative to the start
             // We are forcing the samples to adhear to their own sample times.
-            let delay = currentSampleTimeNanoseconds - (currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)
+            let delay = currentSampleTimeNanoseconds - Int64(currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)
             
             //print("currentSampleTime: \(currentSampleTimeNanoseconds) currentTime: \((currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)) delay: \(delay)")
             

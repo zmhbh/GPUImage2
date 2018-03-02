@@ -2,7 +2,7 @@ import AVFoundation
 
 extension String: Error {}
 
-@objc public protocol AudioEncodingTarget {
+public protocol AudioEncodingTarget {
     func activateAudioTrack()
     func processAudioBuffer(_ sampleBuffer:CMSampleBuffer, shouldInvalidateSampleWhenDone:Bool)
     // Note: This is not used for synchronized encoding.
