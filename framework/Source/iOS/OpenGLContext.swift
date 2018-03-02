@@ -27,7 +27,7 @@ public class OpenGLContext: SerialDispatch {
     }()
     
     
-    public let serialDispatchQueue:DispatchQueue = DispatchQueue(label:"com.sunsetlakesoftware.GPUImage.processingQueue", qos: .userInteractive)
+    public let serialDispatchQueue:DispatchQueue = DispatchQueue(label:"com.sunsetlakesoftware.GPUImage.processingQueue", qos: .userInitiated)
     public let dispatchQueueKey = DispatchSpecificKey<Int>()
     public let dispatchQueueKeyValue: Int
     

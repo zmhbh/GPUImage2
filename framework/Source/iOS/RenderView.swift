@@ -16,6 +16,7 @@ public class RenderView:UIView, ImageConsumer {
     public var sizeInPixels:Size { get { return Size(width:Float(frame.size.width * contentScaleFactor), height:Float(frame.size.height * contentScaleFactor))}}
     
     public var shouldPresentWithTransaction = false
+    public var waitsForTransaction = true
     
     public let sources = SourceContainer()
     public let maximumInputs:UInt = 1
@@ -175,7 +176,7 @@ public class RenderView:UIView, ImageConsumer {
         let processFramebuffer = {
             // Don't bog down UIKIt with a bunch of framebuffers if we are waiting for a transaction to complete
             // otherwise we will block the main thread as it trys to catch up.
-            if (self.waitingForTransaction) { return }
+            if (self.waitingForTransaction && self.waitsForTransaction) { return }
             
             self.delegate?.willDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
             

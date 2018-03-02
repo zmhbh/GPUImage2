@@ -7,12 +7,14 @@ public protocol CameraDelegate: class {
 public enum PhysicalCameraLocation {
     case backFacing
     case frontFacing
+    case frontFacingMirrored
     
     // Documentation: "The front-facing camera would always deliver buffers in AVCaptureVideoOrientationLandscapeLeft and the back-facing camera would always deliver buffers in AVCaptureVideoOrientationLandscapeRight."
     func imageOrientation() -> ImageOrientation {
         switch self {
             case .backFacing: return .landscapeRight
             case .frontFacing: return .landscapeLeft
+            case .frontFacingMirrored: return .landscapeLeft
         }
     }
     
@@ -20,6 +22,7 @@ public enum PhysicalCameraLocation {
         switch self {
             case .backFacing: return .back
             case .frontFacing: return .front
+            case .frontFacingMirrored: return .front
         }
     }
     
@@ -50,7 +53,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public var logFPS:Bool = false
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
-            guard var audioEncodingTarget = audioEncodingTarget else {
+            guard let audioEncodingTarget = audioEncodingTarget else {
                 // Removing the audio inputs and outputs causes a black flash on the video output
                 //self.removeAudioInputsAndOutputs()
                 return
@@ -68,18 +71,18 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public weak var delegate: CameraDelegate?
     public let captureSession:AVCaptureSession
     public let inputCamera:AVCaptureDevice!
-    let videoInput:AVCaptureDeviceInput!
+    public let videoInput:AVCaptureDeviceInput!
     public let videoOutput:AVCaptureVideoDataOutput!
-    var microphone:AVCaptureDevice?
-    var audioInput:AVCaptureDeviceInput?
+    public var microphone:AVCaptureDevice?
+    public var audioInput:AVCaptureDeviceInput?
     public var audioOutput:AVCaptureAudioDataOutput?
 
     var supportsFullYUVRange:Bool = false
     let captureAsYUV:Bool
     let yuvConversionShader:ShaderProgram?
     let frameRenderingSemaphore = DispatchSemaphore(value:1)
-    let cameraProcessingQueue = DispatchQueue.global(priority:DispatchQueue.GlobalQueuePriority.default)
-    let audioProcessingQueue = DispatchQueue.global(priority:DispatchQueue.GlobalQueuePriority.default)
+    let cameraProcessingQueue = DispatchQueue(label:"com.sunsetlakesoftware.GPUImage.cameraProcessingQueue", qos: .default)
+    let audioProcessingQueue = DispatchQueue(label:"com.sunsetlakesoftware.GPUImage.audioProcessingQueue", qos: .default)
 
     let framesToIgnore = 5
     var numberOfFramesCaptured = 0
@@ -158,7 +161,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
         if let connections = videoOutput.connections as? [AVCaptureConnection] {
             for connection in connections {
                 if(connection.isVideoMirroringSupported) {
-                    connection.isVideoMirrored = (location == .frontFacing)
+                    connection.isVideoMirrored = (location == .frontFacingMirrored)
                 }
             }
         }

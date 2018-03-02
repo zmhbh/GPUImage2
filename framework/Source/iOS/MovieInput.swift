@@ -14,7 +14,7 @@ public class MovieInput: ImageSource {
     
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
-            guard var audioEncodingTarget = audioEncodingTarget else {
+            guard let audioEncodingTarget = audioEncodingTarget else {
                 return
             }
             audioEncodingTarget.activateAudioTrack()
@@ -28,15 +28,12 @@ public class MovieInput: ImageSource {
     let asset:AVAsset
     let videoComposition:AVVideoComposition?
     var playAtActualSpeed:Bool
-    var startFrameTime:CMTime?
-    var lastFrameTime:CMTime?
+    var requestedStartTime:CMTime?
+    var actualStartTime:DispatchTime?
     
+    private(set) public var currentTime:CMTime?
     public var loop:Bool
-    public var currentFrameTime:CMTime? {
-        get {
-            return self.lastFrameTime
-        }
-    }
+    
     public var completion: (() -> Void)?
     
     public var synchronizedMovieOutput:MovieOutput? {
@@ -88,7 +85,7 @@ public class MovieInput: ImageSource {
     // MARK: Playback control
     
     public func start(atTime: CMTime) {
-        self.startFrameTime = atTime
+        self.requestedStartTime = atTime
         self.start()
     }
     
@@ -113,7 +110,7 @@ public class MovieInput: ImageSource {
     
     public func pause() {
         self.cancel()
-        self.startFrameTime = self.lastFrameTime
+        self.requestedStartTime = self.currentTime
     }
     
     // MARK: -
@@ -146,11 +143,12 @@ public class MovieInput: ImageSource {
                 assetReader.add(readerAudioTrackOutput)
             }
             
-            if let startFrameTime = self.startFrameTime {
-                assetReader.timeRange = CMTimeRange(start: startFrameTime, duration: kCMTimePositiveInfinity)
+            if let requestedStartTime = self.requestedStartTime {
+                assetReader.timeRange = CMTimeRange(start: requestedStartTime, duration: kCMTimePositiveInfinity)
             }
-            self.startFrameTime = nil
-            self.lastFrameTime = nil
+            self.requestedStartTime = nil
+            self.currentTime = nil
+            self.actualStartTime = nil
             
             return assetReader
         } catch {
@@ -168,10 +166,11 @@ public class MovieInput: ImageSource {
             self.configureThread()
         }
         else if(playAtActualSpeed) {
-            thread.qualityOfService = .userInteractive
+            thread.qualityOfService = .userInitiated
         }
         else {
-            thread.qualityOfService = .default // Synchronized encoding
+             // This includes syncronized encoding since the above vars will be disabled for it
+            thread.qualityOfService = .default
         }
         
         guard let assetReader = self.createReader() else {
@@ -224,7 +223,7 @@ public class MovieInput: ImageSource {
             }
             else {
                 self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
-                if let readerAudioTrackOutput = readerAudioTrackOutput { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
+                if let readerAudioTrackOutput = readerAudioTrackOutput, self.audioEncodingTarget?.readyForNextAudioBuffer() ?? true { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
             }
         }
         
@@ -251,52 +250,42 @@ public class MovieInput: ImageSource {
         guard let sampleBuffer = videoTrackOutput.copyNextSampleBuffer() else {
             if let movieOutput = self.synchronizedMovieOutput {
                 movieOutput.movieProcessingContext.runOperationAsynchronously {
-                    // Clients that are monitoring each input's readyForMoreMediaData value must call markAsFinished on an input when they are done appending buffers to it.
-                    // This is necessary to prevent other inputs from stalling, as they may otherwise wait forever for that input's media data, attempting to complete the ideal interleaving pattern.
+                    // Documentation: "Clients that are monitoring each input's readyForMoreMediaData value must call markAsFinished on an input when they are done
+                    // appending buffers to it. This is necessary to prevent other inputs from stalling, as they may otherwise wait forever
+                    // for that input's media data, attempting to complete the ideal interleaving pattern."
                     movieOutput.videoEncodingIsFinished = true
                     movieOutput.assetWriterVideoInput.markAsFinished()
                 }
             }
-            
             return
         }
         
         if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Process frame input") }
         
-        let renderStart = DispatchTime.now()
-        var frameDurationNanos: Float64 = 0
+        let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
         
         if (self.playAtActualSpeed) {
-            // Sample time e.g. first frame is 0,30 second frame is 1,30
-            let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
-            // Retrieve the rolling frame rate (duration between each frame)
-            let frameDuration = CMTimeSubtract(currentSampleTime, self.lastFrameTime ?? CMTimeAdd(currentSampleTime, CMTime(value: 1, timescale: 30)))
-            frameDurationNanos = CMTimeGetSeconds(frameDuration) * 1_000_000_000
+            let currentSampleTimeNanoseconds = Int64(currentSampleTime.seconds * 1_000_000_000)
+            let currentActualTime = DispatchTime.now()
             
-            self.lastFrameTime = currentSampleTime
+            if(self.actualStartTime == nil) { self.actualStartTime = currentActualTime }
+            
+            // Determine how much time we need to wait in order to catch up to the current time relative to the start
+            // We are forcing the samples to adhear to their own sample times.
+            let delay = currentSampleTimeNanoseconds - (currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)
+            
+            //print("currentSampleTime: \(currentSampleTimeNanoseconds) currentTime: \((currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)) delay: \(delay)")
+            
+            if(delay > 0) {
+                mach_wait_until(mach_absolute_time()+self.nanosToAbs(UInt64(delay)))
+            }
         }
+        
+        self.currentTime = currentSampleTime
         
         sharedImageProcessingContext.runOperationSynchronously{
             self.process(movieFrame:sampleBuffer)
             CMSampleBufferInvalidate(sampleBuffer)
-        }
-        
-        if(self.playAtActualSpeed) {
-            let renderEnd = DispatchTime.now()
-            // Find the amount of time it took to display the last frame
-            let renderDurationNanos = Double(renderEnd.uptimeNanoseconds - renderStart.uptimeNanoseconds)
-            // Find how much time we should wait to display the next frame. So it would be the frame duration minus the
-            // amount of time we already spent rendering the current frame.
-            let waitDurationNanos = Int(frameDurationNanos - renderDurationNanos)
-            
-            // When the wait duration begins returning negative values consistently
-            // It means the OS is unable to provide enough processing time for the above work
-            // and that you need to adjust the real time thread policy below
-            //print("Render duration: \(String(format: "%.4f",renderDurationNanos / 1_000_000)) ms Wait duration: \(String(format: "%.4f",Double(waitDurationNanos) / 1_000_000)) ms")
-            
-            if(waitDurationNanos > 0) {
-                mach_wait_until(mach_absolute_time()+self.nanosToAbs(UInt64(waitDurationNanos)))
-            }
         }
     }
     
@@ -308,7 +297,6 @@ public class MovieInput: ImageSource {
                     movieOutput.assetWriterAudioInput?.markAsFinished()
                 }
             }
-            
             return
         }
         
@@ -418,7 +406,7 @@ public class MovieInput: ImageSource {
         // Not needed for movie inputs
     }
     
-    public func reprocessLastFrame() {
+    public func transmitPreviousFrame() {
         sharedImageProcessingContext.runOperationAsynchronously {
             if let movieFramebuffer = self.movieFramebuffer {
                 self.updateTargetsWithFramebuffer(movieFramebuffer)

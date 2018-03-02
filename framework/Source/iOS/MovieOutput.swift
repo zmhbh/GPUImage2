@@ -2,12 +2,15 @@ import AVFoundation
 
 extension String: Error {}
 
-public protocol AudioEncodingTarget {
+@objc public protocol AudioEncodingTarget {
     func activateAudioTrack()
     func processAudioBuffer(_ sampleBuffer:CMSampleBuffer, shouldInvalidateSampleWhenDone:Bool)
+    // Note: This is not used for synchronized encoding.
+    func readyForNextAudioBuffer() -> Bool
 }
 
 public class MovieOutput: ImageConsumer, AudioEncodingTarget {
+    
     public let sources = SourceContainer()
     public let maximumInputs:UInt = 1
     
@@ -285,6 +288,11 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         else {
             work()
         }
+    }
+    
+    // Note: This is not used for synchronized encoding.
+    public func readyForNextAudioBuffer() -> Bool {
+        return true
     }
 }
 
