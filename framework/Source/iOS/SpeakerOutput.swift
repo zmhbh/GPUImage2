@@ -46,7 +46,7 @@ public class SpeakerOutput: AudioEncodingTarget {
     var rescueBufferContentsSize:UInt32 = 0
 
     
-    init() {
+    public init() {
         circularBufferSize = bufferUnit * unitSize
         rescueBufferSize = Int(bufferUnit / 2)
     }

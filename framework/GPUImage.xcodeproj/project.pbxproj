@@ -17,8 +17,7 @@
 		1F6D1CB92048FB0300317B5F /* TPCircularBuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 1F6D1CB62048FB0300317B5F /* TPCircularBuffer.h */; };
 		1F6D1CBA2048FB0300317B5F /* TPCircularBuffer.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F6D1CB72048FB0300317B5F /* TPCircularBuffer.m */; };
 		1F6D1CBB2048FB0300317B5F /* TPCircularBuffer.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F6D1CB72048FB0300317B5F /* TPCircularBuffer.m */; };
-		1F6D1CBD2048FB0B00317B5F /* SpeakerOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6D1CBC2048FB0B00317B5F /* SpeakerOutput.swift */; };
-		1F6D1CBE2048FB0B00317B5F /* SpeakerOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6D1CBC2048FB0B00317B5F /* SpeakerOutput.swift */; };
+		1F6D1CC02048FFD900317B5F /* SpeakerOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6D1CBF2048FFD900317B5F /* SpeakerOutput.swift */; };
 		BC09239E1C92658200A2ADFA /* ShaderProgram_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */; };
 		BC0923A11C92661D00A2ADFA /* Pipeline_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */; };
 		BC0923A21C92664900A2ADFA /* Framebuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB279EB1C8D11630013E213 /* Framebuffer.swift */; };
@@ -389,7 +388,7 @@
 		1F6D1CB42048F8DD00317B5F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS11.2.sdk/System/Library/Frameworks/AVFoundation.framework; sourceTree = DEVELOPER_DIR; };
 		1F6D1CB62048FB0300317B5F /* TPCircularBuffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = TPCircularBuffer.h; path = Source/TPCircularBuffer.h; sourceTree = "<group>"; };
 		1F6D1CB72048FB0300317B5F /* TPCircularBuffer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TPCircularBuffer.m; path = Source/TPCircularBuffer.m; sourceTree = "<group>"; };
-		1F6D1CBC2048FB0B00317B5F /* SpeakerOutput.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = SpeakerOutput.swift; path = Source/SpeakerOutput.swift; sourceTree = "<group>"; };
+		1F6D1CBF2048FFD900317B5F /* SpeakerOutput.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = SpeakerOutput.swift; path = Source/iOS/SpeakerOutput.swift; sourceTree = "<group>"; };
 		BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ShaderProgram_Tests.swift; path = Tests/ShaderProgram_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Pipeline_Tests.swift; path = Tests/Pipeline_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC1E12F41C9F2FD7008F844F /* ThreeInput.vsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; name = ThreeInput.vsh; path = Source/Operations/Shaders/ThreeInput.vsh; sourceTree = "<group>"; };
@@ -1152,7 +1151,7 @@
 		BC9E35201E524D2A00B8604F /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				1F6D1CBC2048FB0B00317B5F /* SpeakerOutput.swift */,
+				1F6D1CBF2048FFD900317B5F /* SpeakerOutput.swift */,
 				BC9E35231E524D4D00B8604F /* RenderView.swift */,
 				BC9E35221E524D4D00B8604F /* PictureOutput.swift */,
 				BC9E35211E524D4D00B8604F /* MovieOutput.swift */,
@@ -1490,7 +1489,6 @@
 				BC7FD11C1CB0795A00037949 /* NormalBlend.swift in Sources */,
 				BC4EE15E1CB3481F00AD8A65 /* ThresholdSobelEdgeDetection.swift in Sources */,
 				BC7FD1911CB1D2A300037949 /* ImageGenerator.swift in Sources */,
-				1F6D1CBD2048FB0B00317B5F /* SpeakerOutput.swift in Sources */,
 				1F499A731FDA0F9F0000E37E /* NSObject+Exception.m in Sources */,
 				BC7FD1201CB079B200037949 /* SaturationBlend.swift in Sources */,
 				BCA4E2491CC3EF26007B51BA /* ColourFASTFeatureDetection.swift in Sources */,
@@ -1676,7 +1674,7 @@
 				BC9E356E1E5256CE00B8604F /* FalseColor.swift in Sources */,
 				BC9E35881E52572000B8604F /* ThresholdSobelEdgeDetection.swift in Sources */,
 				BC9E356F1E5256D000B8604F /* HighlightsAndShadows.swift in Sources */,
-				1F6D1CBE2048FB0B00317B5F /* SpeakerOutput.swift in Sources */,
+				1F6D1CC02048FFD900317B5F /* SpeakerOutput.swift in Sources */,
 				1F499A741FDA0F9F0000E37E /* NSObject+Exception.m in Sources */,
 				BC9E35AA1E52578900B8604F /* Halftone.swift in Sources */,
 				BC9E35961E52574A00B8604F /* ImageBuffer.swift in Sources */,
