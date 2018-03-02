@@ -40,7 +40,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     
     public init(URL:Foundation.URL, size:Size, fileType:String = AVFileTypeQuickTimeMovie, liveVideo:Bool = false, videoSettings:[String:Any]? = nil, audioSettings:[String:Any]? = nil) throws {
         imageProcessingShareGroup = sharedImageProcessingContext.context.sharegroup
-        // Since we cannot access self before calling super, initialize here and not above
+        // Since we cannot access self before calling super, initialize this here and not above.
         let movieProcessingContext = OpenGLContext()
         
         if movieProcessingContext.supportsTextureCaches() {
@@ -86,7 +86,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     public func startRecording(_ completionCallback:((_ started: Bool) -> Void)? = nil) {
         // Don't do this work on the movieProcessingContext que so we don't block it.
         // If it does get blocked framebuffers will pile up and after it is no longer blocked/this work has finished
-        // we will be able to accept framebuffers but the ones that piled up will come in too quickly resulting in most being dropped
+        // we will be able to accept framebuffers but the ones that piled up will come in too quickly resulting in most being dropped.
         DispatchQueue.global(qos: .utility).async {
             do {
                 var success = false
@@ -119,7 +119,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
                 CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
                 
-                // This work must be done on the movieProcessingContext since we access openGL
+                // This work must be done on the movieProcessingContext since we access openGL.
                 try self.movieProcessingContext.runOperationSynchronously {
                     let bufferSize = GLSize(self.size)
                     var cachedTextureRef:CVOpenGLESTexture? = nil
@@ -157,7 +157,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             
             if let lastFrame = self.previousFrameTime {
                 // Resolve black frames at the end. If we only call finishWriting() the session's effective end time
-                // will be the latest end timestamp of the session's samples which could be either video or audio
+                // will be the latest end timestamp of the session's samples which could be either video or audio.
                 self.assetWriter.endSession(atSourceTime: lastFrame)
             }
             
@@ -178,11 +178,11 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             // Ignore still images and other non-video updates (do I still need this?)
             guard let frameTime = framebuffer.timingStyle.timestamp?.asCMTime else { return }
             
-            // If two consecutive times with the same value are added to the movie, it aborts recording, so I bail on that case
+            // If two consecutive times with the same value are added to the movie, it aborts recording, so I bail on that case.
             guard (frameTime != self.previousFrameTime) else { return }
             
             if (self.previousFrameTime == nil) {
-                // This resolves black frames at the beginning. Any samples recieved before this time will be edited out
+                // This resolves black frames at the beginning. Any samples recieved before this time will be edited out.
                 self.assetWriter.startSession(atSourceTime: frameTime)
             }
             

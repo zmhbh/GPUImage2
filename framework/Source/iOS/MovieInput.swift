@@ -19,7 +19,7 @@ public class MovieInput: ImageSource {
             }
             audioEncodingTarget.activateAudioTrack()
             
-            // Call enableSynchronizedEncoding() again if they didn't set the audioEncodingTarget before setting synchronizedMovieOutput
+            // Call enableSynchronizedEncoding() again if they didn't set the audioEncodingTarget before setting synchronizedMovieOutput.
             if(synchronizedMovieOutput != nil) { self.enableSynchronizedEncoding() }
         }
     }
@@ -28,10 +28,16 @@ public class MovieInput: ImageSource {
     let asset:AVAsset
     let videoComposition:AVVideoComposition?
     var playAtActualSpeed:Bool
-    var requestedStartTime:CMTime?
-    var actualStartTime:DispatchTime?
     
+    // Time in the video where it should start.
+    var requestedStartTime:CMTime?
+    // Time in the video where it started.
+    var startTime:CMTime?
+    // Time according to device clock when the video started.
+    var actualStartTime:DispatchTime?
+    // Last sample time that played.
     private(set) public var currentTime:CMTime?
+    
     public var loop:Bool
     
     public var completion: (() -> Void)?
@@ -96,7 +102,7 @@ public class MovieInput: ImageSource {
             // If the current thread is running and has not been cancelled, bail.
             return
         }
-        // Cancel the thread just to be safe in the event we somehow get here with the thread still running
+        // Cancel the thread just to be safe in the event we somehow get here with the thread still running.
         self.currentThread?.cancel()
         
         self.currentThread = Thread(target: self, selector: #selector(beginReading), object: nil)
@@ -143,6 +149,7 @@ public class MovieInput: ImageSource {
                 assetReader.add(readerAudioTrackOutput)
             }
             
+            self.startTime = requestedStartTime
             if let requestedStartTime = self.requestedStartTime {
                 assetReader.timeRange = CMTimeRange(start: requestedStartTime, duration: kCMTimePositiveInfinity)
             }
@@ -169,12 +176,12 @@ public class MovieInput: ImageSource {
             thread.qualityOfService = .userInitiated
         }
         else {
-             // This includes syncronized encoding since the above vars will be disabled for it
+             // This includes syncronized encoding since the above vars will be disabled for it.
             thread.qualityOfService = .default
         }
         
         guard let assetReader = self.createReader() else {
-            return // A return statement in this frame will end thread execution
+            return // A return statement in this frame will end thread execution.
         }
         
         do {
@@ -218,21 +225,26 @@ public class MovieInput: ImageSource {
                     self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
                 }
                 if(movieOutput.assetWriterAudioInput?.isReadyForMoreMediaData ?? false) {
-                    if let readerAudioTrackOutput = readerAudioTrackOutput { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
+                    if let readerAudioTrackOutput = readerAudioTrackOutput {
+                        self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput)
+                    }
                 }
             }
             else {
                 self.readNextVideoFrame(with: assetReader, from: readerVideoTrackOutput!)
-                if let readerAudioTrackOutput = readerAudioTrackOutput, self.audioEncodingTarget?.readyForNextAudioBuffer() ?? true { self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput) }
+                if let readerAudioTrackOutput = readerAudioTrackOutput,
+                    self.audioEncodingTarget?.readyForNextAudioBuffer() ?? true {
+                    self.readNextAudioSample(with: assetReader, from: readerAudioTrackOutput)
+                }
             }
         }
         
         assetReader.cancelReading()
         
         // Since only the main thread will cancel and create threads jump onto it to prevent
-        // the current thread from being cancelled in between the below if statement and creating the new thread
+        // the current thread from being cancelled in between the below if statement and creating the new thread.
         DispatchQueue.main.async {
-            // Start the video over so long as it wasn't cancelled
+            // Start the video over so long as it wasn't cancelled.
             if (self.loop && !thread.isCancelled) {
                 self.currentThread = Thread(target: self, selector: #selector(self.beginReading), object: nil)
                 self.currentThread?.start()
@@ -262,7 +274,14 @@ public class MovieInput: ImageSource {
         
         if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Process frame input") }
         
-        let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
+        var currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
+        
+        self.currentTime = currentSampleTime
+        
+        if let startTime = self.startTime {
+            // Make sure our samples start at kCMTimeZero if the video was started midway.
+            currentSampleTime = CMTimeSubtract(currentSampleTime, startTime)
+        }
         
         if (self.playAtActualSpeed) {
             let currentSampleTimeNanoseconds = Int64(currentSampleTime.seconds * 1_000_000_000)
@@ -270,8 +289,8 @@ public class MovieInput: ImageSource {
             
             if(self.actualStartTime == nil) { self.actualStartTime = currentActualTime }
             
-            // Determine how much time we need to wait in order to display the frame at the right current time relative to the start
-            // What we are doing is forcing the samples to adhear to their own sample times.
+            // Determine how much time we need to wait in order to display the frame at the right currentActualTime such that it will match the currentSampleTime.
+            // The reason we subtract the actualStartTime from the currentActualTime is so the actual time starts at zero relative to the video start.
             let delay = currentSampleTimeNanoseconds - Int64(currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)
             
             //print("currentSampleTime: \(currentSampleTimeNanoseconds) currentTime: \((currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)) delay: \(delay)")
@@ -288,8 +307,6 @@ public class MovieInput: ImageSource {
                 return
             }
         }
-        
-        self.currentTime = currentSampleTime
         
         sharedImageProcessingContext.runOperationSynchronously{
             self.process(movieFrame:sampleBuffer)
