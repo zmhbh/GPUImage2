@@ -15,7 +15,7 @@ public class SpeakerOutput: AudioEncodingTarget {
     
     public var changesAudioSession = true
     
-    var isPlaying = false
+    public private(set) var isPlaying = false
     var hasBuffer = false
     var isReadyForMoreMediaData = true {
         willSet {
@@ -67,15 +67,24 @@ public class SpeakerOutput: AudioEncodingTarget {
     // MARK: Playback control
     
     public func start() {
+        if(isPlaying) { return }
+        
         AUGraphStart(processingGraph!)
         
         isPlaying = true
     }
     
     public func stop() {
+        if(!isPlaying) { return }
+        
         AUGraphStop(processingGraph!)
         
         isPlaying = false
+        
+        rescueBufferContentsSize = 0
+        TPCircularBufferClear(&circularBuffer)
+        hasBuffer = false
+        isReadyForMoreMediaData = true
     }
     
     // MARK: -
@@ -210,7 +219,8 @@ public class SpeakerOutput: AudioEncodingTarget {
         // This is actually doing audioBufferList.mBuffers[0]
         // Since the struct has an array of length of 1 the compiler is interpreting
         // it as a single item array and not letting us use the above line.
-        // Since the array pointer points to the first item of the c array this is equally fine.
+        // Since the array pointer points to the first item of the c array
+        // and all we want is the first item this is equally fine.
         let audioBuffer = audioBufferList.mBuffers
         
         // Place the AudioBufferList in the circular buffer
