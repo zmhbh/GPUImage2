@@ -270,14 +270,22 @@ public class MovieInput: ImageSource {
             
             if(self.actualStartTime == nil) { self.actualStartTime = currentActualTime }
             
-            // Determine how much time we need to wait in order to catch up to the current time relative to the start
-            // We are forcing the samples to adhear to their own sample times.
+            // Determine how much time we need to wait in order to display the frame at the right current time relative to the start
+            // What we are doing is forcing the samples to adhear to their own sample times.
             let delay = currentSampleTimeNanoseconds - Int64(currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)
             
             //print("currentSampleTime: \(currentSampleTimeNanoseconds) currentTime: \((currentActualTime.uptimeNanoseconds-self.actualStartTime!.uptimeNanoseconds)) delay: \(delay)")
             
             if(delay > 0) {
                 mach_wait_until(mach_absolute_time()+self.nanosToAbs(UInt64(delay)))
+            }
+            else {
+                // This only happens if we aren't given enough processing time for playback
+                // but is necessary otherwise the playback will never catch up to its timeline.
+                // If we weren't adhearing to the sample timline and used the old timing method
+                // the video would still lag during an event like this.
+                //print("Dropping frame in order to catch up")
+                return
             }
         }
         
