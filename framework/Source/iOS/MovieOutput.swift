@@ -53,7 +53,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         
         assetWriter = try AVAssetWriter(url:URL, fileType:fileType)
         // Set this to make sure that a functional movie is produced, even if the recording is cut off mid-stream. Only the last 1/4 second should be lost in that case.
-        assetWriter.movieFragmentInterval = CMTimeMakeWithSeconds(0.25, 1000)
+        assetWriter.movieFragmentInterval = CMTimeMakeWithSeconds(1, 1000)
         
         var localSettings:[String:Any]
         if let videoSettings = videoSettings {
@@ -150,6 +150,11 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                     return
             }
             
+            // Wait for any remaining framebuffers/audio samples to process before finishing
+            sharedImageProcessingContext.runOperationSynchronously {
+                
+            }
+            
             self.audioEncodingIsFinished = true
             self.videoEncodingIsFinished = true
             
@@ -164,16 +169,20 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             self.assetWriter.finishWriting {
                 completionCallback?()
             }
+            self.synchronizedEncodingDebugPrint("MovieOutput finished writing")
         }
     }
     
     public func newFramebufferAvailable(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
         glFinish();
         
-        movieProcessingContext.runOperationAsynchronously {
+        let work = {
             guard self.isRecording,
                 self.assetWriter.status == .writing,
-                !self.videoEncodingIsFinished else { return }
+                !self.videoEncodingIsFinished else {
+                    self.synchronizedEncodingDebugPrint("Guard fell through, dropping frame")
+                    return
+            }
             
             // Ignore still images and other non-video updates (do I still need this?)
             guard let frameTime = framebuffer.timingStyle.timestamp?.asCMTime else { return }
@@ -194,7 +203,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             }
             
             while(!self.assetWriterVideoInput.isReadyForMoreMediaData && !self.encodingLiveVideo && !self.videoEncodingIsFinished) {
-                if(synchronizedEncodingDebug) { print("Video waiting...") }
+                self.synchronizedEncodingDebugPrint("Video waiting...")
                 // Better to poll isReadyForMoreMediaData often since when it does become true
                 // we don't want to risk letting framebuffers pile up in between poll intervals.
                 usleep(100000) // 0.1 seconds
@@ -207,18 +216,40 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             
             self.renderIntoPixelBuffer(self.pixelBuffer!, framebuffer:framebuffer)
             
-            if(synchronizedEncodingDebug && !self.encodingLiveVideo) { print("Process frame output") }
+            self.synchronizedEncodingDebugPrint("Process frame output")
             
-            if (!self.assetWriterPixelBufferInput.append(self.pixelBuffer!, withPresentationTime:frameTime)) {
-                debugPrint("Problem appending pixel buffer at time: \(frameTime)")
+            do {
+                try NSObject.catchException {
+                    if (!self.assetWriterPixelBufferInput.append(self.pixelBuffer!, withPresentationTime:frameTime)) {
+                        debugPrint("Problem appending pixel buffer at time: \(frameTime)")
+                    }
+                }
+            }
+            catch {
+                print("Trouble appending audio sample buffer: \(error)")
             }
             
             CVPixelBufferUnlockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
             if !self.movieProcessingContext.supportsTextureCaches() {
                 self.pixelBuffer = nil
             }
+            
+            sharedImageProcessingContext.runOperationAsynchronously {
+                framebuffer.unlock()
+            }
+        }
 
-            framebuffer.unlock()
+        if(self.encodingLiveVideo) {
+            // This is done asynchronously to reduce the amount of work done on the sharedImageProcessingContext que
+            // so we can decrease the risk of frames being dropped by the camera. I believe it is unlikely a backlog of framebuffers will occur
+            // since the framebuffers come in much slower than during synchronized encoding.
+            movieProcessingContext.runOperationAsynchronously(work)
+        }
+        else {
+            // This is done synchronously to prevent framebuffers from piling up during synchronized encoding.
+            // If we don't force the sharedImageProcessingContext que to wait for this frame to finish processing it will
+            // keep sending frames whenever isReadyForMoreMediaData = true but the movieProcessingContext que would run when the system wants it to.
+            movieProcessingContext.runOperationSynchronously(work)
         }
     }
     
@@ -271,14 +302,21 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             }
             
             while(!assetWriterAudioInput.isReadyForMoreMediaData && !self.encodingLiveVideo && !self.audioEncodingIsFinished) {
-                if(synchronizedEncodingDebug) { print("Audio waiting...") }
+                self.synchronizedEncodingDebugPrint("Audio waiting...")
                 usleep(100000)
             }
             
-            if(synchronizedEncodingDebug && !self.encodingLiveVideo) { print("Process audio sample output") }
+            self.synchronizedEncodingDebugPrint("Process audio sample output")
             
-            if (!assetWriterAudioInput.append(sampleBuffer)) {
-                print("Trouble appending audio sample buffer: \(String(describing: self.assetWriter.error))")
+            do {
+                try NSObject.catchException {
+                    if (!assetWriterAudioInput.append(sampleBuffer)) {
+                        print("Trouble appending audio sample buffer: \(String(describing: self.assetWriter.error))")
+                    }
+                }
+            }
+            catch {
+                print("Trouble appending audio sample buffer: \(error)")
             }
         }
         
@@ -293,6 +331,10 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     // Note: This is not used for synchronized encoding.
     public func readyForNextAudioBuffer() -> Bool {
         return true
+    }
+    
+    func synchronizedEncodingDebugPrint(_ string: String) {
+        if(synchronizedEncodingDebug && !encodingLiveVideo) { print(string) }
     }
 }
 

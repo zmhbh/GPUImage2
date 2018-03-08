@@ -215,9 +215,9 @@ public class MovieInput: ImageSource {
             if let movieOutput = self.synchronizedMovieOutput {
                 self.conditionLock.lock()
                 if(self.readingShouldWait) {
-                    if(synchronizedEncodingDebug) { print("Disable reading") }
+                    self.synchronizedEncodingDebugPrint("Disable reading")
                     self.conditionLock.wait()
-                    if(synchronizedEncodingDebug) { print("Enable reading") }
+                    self.synchronizedEncodingDebugPrint("Enable reading")
                 }
                 self.conditionLock.unlock()
                 
@@ -253,7 +253,7 @@ public class MovieInput: ImageSource {
                 self.delegate?.didFinishMovie()
                 self.completion?()
                 
-                if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Synchronized encoding finished") }
+                self.synchronizedEncodingDebugPrint("MovieInput finished reading")
             }
         }
     }
@@ -272,7 +272,7 @@ public class MovieInput: ImageSource {
             return
         }
         
-        if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Process frame input") }
+        self.synchronizedEncodingDebugPrint("Process frame input")
         
         var currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
         
@@ -325,7 +325,7 @@ public class MovieInput: ImageSource {
             return
         }
         
-        if(self.synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print("Process audio sample input") }
+        self.synchronizedEncodingDebugPrint("Process audio sample input")
         
         self.audioEncodingTarget?.processAudioBuffer(sampleBuffer, shouldInvalidateSampleWhenDone: true)
     }
@@ -526,11 +526,15 @@ public class MovieInput: ImageSource {
         
         if ret != KERN_SUCCESS {
             mach_error("thread_policy_set:", ret)
-            fatalError("Unable to configure thread")
+            print("Unable to configure thread")
         }
     }
     
     func nanosToAbs(_ nanos: UInt64) -> UInt64 {
         return nanos * UInt64(timebaseInfo.denom) / UInt64(timebaseInfo.numer)
+    }
+    
+    func synchronizedEncodingDebugPrint(_ string: String) {
+        if(synchronizedMovieOutput != nil && synchronizedEncodingDebug) { print(string) }
     }
 }
