@@ -1,6 +1,8 @@
 import AVFoundation
 
-extension String: Error {}
+extension String: LocalizedError {
+    public var errorDescription: String? { return self }
+}
 
 public protocol AudioEncodingTarget {
     func activateAudioTrack()

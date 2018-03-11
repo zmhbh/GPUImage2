@@ -10,13 +10,13 @@ public protocol RenderViewDelegate: class {
 public class RenderView:UIView, ImageConsumer {
     public weak var delegate:RenderViewDelegate?
     
+    public var shouldPresentWithTransaction = false
+    public var waitsForTransaction = true
+    
     public var backgroundRenderColor = Color.black
     public var fillMode = FillMode.preserveAspectRatio
     public var orientation:ImageOrientation = .portrait
     public var sizeInPixels:Size { get { return Size(width:Float(frame.size.width * contentScaleFactor), height:Float(frame.size.height * contentScaleFactor))}}
-    
-    public var shouldPresentWithTransaction = false
-    public var waitsForTransaction = true
     
     public let sources = SourceContainer()
     public let maximumInputs:UInt = 1
@@ -51,7 +51,9 @@ public class RenderView:UIView, ImageConsumer {
             // Check if the size changed
             if(oldValue.size != self.bounds.size) {
                 // Destroy the displayFramebuffer so we render at the correct size for the next frame
-                self.destroyDisplayFramebuffer()
+                sharedImageProcessingContext.runOperationAsynchronously{
+                    self.destroyDisplayFramebuffer()
+                }
             }
         }
     }
@@ -67,7 +69,9 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     deinit {
-        destroyDisplayFramebuffer()
+        sharedImageProcessingContext.runOperationSynchronously{
+            destroyDisplayFramebuffer()
+        }
     }
     
     var waitingForTransaction = false
@@ -86,7 +90,6 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     func createDisplayFramebuffer() -> Bool {
-        sharedImageProcessingContext.makeCurrentContext()
         var newDisplayFramebuffer:GLuint = 0
         glGenFramebuffers(1, &newDisplayFramebuffer)
         displayFramebuffer = newDisplayFramebuffer
@@ -100,14 +103,7 @@ public class RenderView:UIView, ImageConsumer {
         // Without the flush I occasionally get a warning from UIKit on the camera renderView and
         // when the warning comes in the renderView just stays black. This happens rarely but often enough to be a problem.
         // I tried a transaction and it doesn't silence it and this is likely why --> http://danielkbx.com/post/108060601989/catransaction-flush
-        // This flush defeats the purpose of presentWithTransaction() so it should only be enabled when you need it.
-        // The idea with presentWithTransaction() is to be able to change the bounds of this renderView, then draw contents into it
-        // at the correct bounds without any blips in between. If you have this flush() in place it will force a layout pass in the middle of that
-        // causing the old contents to be briefly distorted while the new contents are yet to be drawn.
-        // That is why this shouldn't be used in media playback scenarios.
-        if(!shouldPresentWithTransaction) {
-            CATransaction.flush()
-        }
+        CATransaction.flush()
         sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.internalLayer)
         
         var backingWidth:GLint = 0
@@ -152,18 +148,15 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     func destroyDisplayFramebuffer() {
-        sharedImageProcessingContext.runOperationSynchronously{
-            if let displayFramebuffer = self.displayFramebuffer {
-                var temporaryFramebuffer = displayFramebuffer
-                glDeleteFramebuffers(1, &temporaryFramebuffer)
-                self.displayFramebuffer = nil
-            }
-            
-            if let displayRenderbuffer = self.displayRenderbuffer {
-                var temporaryRenderbuffer = displayRenderbuffer
-                glDeleteRenderbuffers(1, &temporaryRenderbuffer)
-                self.displayRenderbuffer = nil
-            }
+        if let displayFramebuffer = self.displayFramebuffer {
+            var temporaryFramebuffer = displayFramebuffer
+            glDeleteFramebuffers(1, &temporaryFramebuffer)
+            self.displayFramebuffer = nil
+        }
+        if let displayRenderbuffer = self.displayRenderbuffer {
+            var temporaryRenderbuffer = displayRenderbuffer
+            glDeleteRenderbuffers(1, &temporaryRenderbuffer)
+            self.displayRenderbuffer = nil
         }
     }
     
@@ -173,16 +166,20 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     public func newFramebufferAvailable(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
-        let processFramebuffer = {
+        let work: () -> Void = {
             // Don't bog down UIKIt with a bunch of framebuffers if we are waiting for a transaction to complete
             // otherwise we will block the main thread as it trys to catch up.
-            if (self.waitingForTransaction && self.waitsForTransaction) { return }
+            if (self.waitingForTransaction && self.waitsForTransaction) {
+                framebuffer.unlock()
+                return
+            }
             
             self.delegate?.willDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
             
-            sharedImageProcessingContext.runOperationSynchronously {
+            sharedImageProcessingContext.runOperationAsynchronously {
                 if (self.displayFramebuffer == nil && !self.createDisplayFramebuffer()) {
                     // Bail if we couldn't successfully create the displayFramebuffer
+                    framebuffer.unlock()
                     return
                 }
                 self.activateDisplayFramebuffer()
@@ -195,12 +192,17 @@ public class RenderView:UIView, ImageConsumer {
                 glBindRenderbuffer(GLenum(GL_RENDERBUFFER), self.displayRenderbuffer!)
                 
                 sharedImageProcessingContext.presentBufferForDisplay()
-            }
-            
-            self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
-            
-            sharedImageProcessingContext.runOperationSynchronously {
-                framebuffer.unlock()
+                
+                if(self.delegate?.shouldDisplayNextFramebufferOnMainThread() ?? false) {
+                    DispatchQueue.main.async {
+                        self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+                        framebuffer.unlock()
+                    }
+                }
+                else {
+                    self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+                    framebuffer.unlock()
+                }
             }
         }
         
@@ -209,12 +211,10 @@ public class RenderView:UIView, ImageConsumer {
             // If you are curious, change this to sync, then try trimming/scrubbing a video
             // Before that happens you will get a deadlock when someone calls runOperationSynchronously since the main thread is blocked
             // There is a way to get around this but then the first thing mentioned will happen
-            DispatchQueue.main.async {
-                processFramebuffer()
-            }
+            DispatchQueue.main.async(execute: work)
         }
         else {
-            processFramebuffer()
+            work()
         }
     }
 }

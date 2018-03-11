@@ -67,7 +67,7 @@ public class SpeakerOutput: AudioEncodingTarget {
     // MARK: Playback control
     
     public func start() {
-        if(isPlaying) { return }
+        if(isPlaying || processingGraph == nil) { return }
         
         AUGraphStart(processingGraph!)
         
@@ -75,7 +75,7 @@ public class SpeakerOutput: AudioEncodingTarget {
     }
     
     public func stop() {
-        if(!isPlaying) { return }
+        if(!isPlaying || processingGraph == nil) { return }
         
         AUGraphStop(processingGraph!)
         

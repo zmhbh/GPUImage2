@@ -6,12 +6,12 @@ public class PictureInput: ImageSource {
     var imageFramebuffer:Framebuffer?
     var hasProcessedImage:Bool = false
     
-    public init(image:CGImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
+    public init(image:CGImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
         let widthOfImage = GLint(image.width)
         let heightOfImage = GLint(image.height)
         
         // If passed an empty image reference, CGContextDrawImage will fail in future versions of the SDK.
-        guard((widthOfImage > 0) && (heightOfImage > 0)) else { fatalError("Tried to pass in a zero-sized image") }
+        guard((widthOfImage > 0) && (heightOfImage > 0)) else { throw "Tried to pass in a zero-sized image" }
         
         var widthToUseForTexture = widthOfImage
         var heightToUseForTexture = heightOfImage
@@ -72,7 +72,7 @@ public class PictureInput: ImageSource {
             }
         }
         
-        sharedImageProcessingContext.runOperationSynchronously{
+        try sharedImageProcessingContext.runOperationSynchronously{
             //    CFAbsoluteTime elapsedTime, startTime = CFAbsoluteTimeGetCurrent();
             
             if (shouldRedrawUsingCoreGraphics) {
@@ -86,19 +86,15 @@ public class PictureInput: ImageSource {
                 imageContext?.draw(image, in:CGRect(x:0.0, y:0.0, width:CGFloat(widthToUseForTexture), height:CGFloat(heightToUseForTexture)))
             } else {
                 // Access the raw image bytes directly
-                guard let data = image.dataProvider?.data else { return }
+                guard let data = image.dataProvider?.data else { throw "Unable to retrieve image dataProvider" }
                 dataFromImageDataProvider = data
                 imageData = UnsafeMutablePointer<GLubyte>(mutating:CFDataGetBytePtr(dataFromImageDataProvider))
             }
             
-            do {
-                // TODO: Alter orientation based on metadata from photo
-                self.imageFramebuffer = try Framebuffer(context:sharedImageProcessingContext, orientation:orientation, size:GLSize(width:widthToUseForTexture, height:heightToUseForTexture), textureOnly:true)
-                self.imageFramebuffer!.lock()
-            } catch {
-                print("ERROR: Unable to initialize framebuffer of size (\(widthToUseForTexture), \(heightToUseForTexture)) with error: \(error)")
-                return
-            }
+            // TODO: Alter orientation based on metadata from photo
+            self.imageFramebuffer = try Framebuffer(context:sharedImageProcessingContext, orientation:orientation, size:GLSize(width:widthToUseForTexture, height:heightToUseForTexture), textureOnly:true)
+            self.imageFramebuffer!.lock()
+
             
             glBindTexture(GLenum(GL_TEXTURE_2D), self.imageFramebuffer!.texture)
             if (smoothlyScaleOutput) {
@@ -119,13 +115,13 @@ public class PictureInput: ImageSource {
         
     }
     
-    public convenience init(image:UIImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
-        self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
+    public convenience init(image:UIImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
+        try self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
     }
     
-    public convenience init(imageName:String, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
-        guard let image = UIImage(named:imageName) else { fatalError("No such image named: \(imageName) in your application bundle") }
-        self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
+    public convenience init(imageName:String, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
+        guard let image = UIImage(named:imageName) else { throw "No such image named: \(imageName) in your application bundle" }
+        try self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
     }
     
     deinit {

@@ -9,8 +9,8 @@ public class SoftElegance: OperationGroup {
         super.init()
         
         self.configureGroup{input, output in
-            self.lookup1.lookupImage = PictureInput(imageName:"lookup_soft_elegance_1.png")
-            self.lookup2.lookupImage = PictureInput(imageName:"lookup_soft_elegance_2.png")
+            self.lookup1.lookupImage = try? PictureInput(imageName:"lookup_soft_elegance_1.png")
+            self.lookup2.lookupImage = try? PictureInput(imageName:"lookup_soft_elegance_2.png")
             self.gaussianBlur.blurRadiusInPixels = 10.0
             self.alphaBlend.mix = 0.14
 
