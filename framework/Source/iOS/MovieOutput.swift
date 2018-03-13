@@ -152,11 +152,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                     return
             }
             
-            // Wait for any remaining framebuffers/audio samples to process before finishing
-            sharedImageProcessingContext.runOperationSynchronously {
-                
-            }
-            
             self.audioEncodingIsFinished = true
             self.videoEncodingIsFinished = true
             
