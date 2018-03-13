@@ -40,7 +40,11 @@ public class MovieInput: ImageSource {
     
     public var loop:Bool
     
+    // Called after the video finishes. Not called when cancel() or pause() is called.
     public var completion: (() -> Void)?
+    // Progress block of the video with a paramater value of 0-1.
+    // Can be used to check video encoding progress. Not called from main thread.
+    public var progress: ((Double) -> Void)?
     
     public var synchronizedMovieOutput:MovieOutput? {
         didSet {
@@ -149,7 +153,7 @@ public class MovieInput: ImageSource {
                 assetReader.add(readerAudioTrackOutput)
             }
             
-            self.startTime = requestedStartTime
+            self.startTime = self.requestedStartTime
             if let requestedStartTime = self.requestedStartTime {
                 assetReader.timeRange = CMTimeRange(start: requestedStartTime, duration: kCMTimePositiveInfinity)
             }
@@ -275,12 +279,14 @@ public class MovieInput: ImageSource {
         self.synchronizedEncodingDebugPrint("Process frame input")
         
         var currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
+        var duration = self.asset.duration // Only used for the progress block so its acuracy is not critical
         
         self.currentTime = currentSampleTime
         
         if let startTime = self.startTime {
             // Make sure our samples start at kCMTimeZero if the video was started midway.
             currentSampleTime = CMTimeSubtract(currentSampleTime, startTime)
+            duration = CMTimeSubtract(duration, startTime)
         }
         
         if (self.playAtActualSpeed) {
@@ -307,6 +313,8 @@ public class MovieInput: ImageSource {
                 return
             }
         }
+        
+        self.progress?(currentSampleTime.seconds/duration.seconds)
         
         sharedImageProcessingContext.runOperationSynchronously{
             self.process(movieFrame:sampleBuffer)
