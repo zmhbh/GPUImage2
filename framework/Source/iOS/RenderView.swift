@@ -3,15 +3,16 @@ import UIKit
 public protocol RenderViewDelegate: class {
     func willDisplayFramebuffer(renderView: RenderView, framebuffer: Framebuffer)
     func didDisplayFramebuffer(renderView: RenderView, framebuffer: Framebuffer)
-    func shouldDisplayNextFramebufferOnMainThread() -> Bool
+    // Only use this if you need to do layout in willDisplayFramebuffer before the framebuffer actually gets displayed
+    // Typically should only be used for one frame otherwise will cause serious playback issues
+    // When true the above delegate methods will be called from the main thread instead of the sharedImageProcessing que
+    // Default is false
+    func shouldDisplayNextFramebufferAfterMainThreadLoop() -> Bool
 }
 
 // TODO: Add support for transparency
 public class RenderView:UIView, ImageConsumer {
     public weak var delegate:RenderViewDelegate?
-    
-    public var shouldPresentWithTransaction = false
-    public var waitsForTransaction = true
     
     public var backgroundRenderColor = Color.black
     public var fillMode = FillMode.preserveAspectRatio
@@ -64,6 +65,7 @@ public class RenderView:UIView, ImageConsumer {
         let eaglLayer = self.layer as! CAEAGLLayer
         eaglLayer.isOpaque = true
         eaglLayer.drawableProperties = [kEAGLDrawablePropertyRetainedBacking: NSNumber(value:false), kEAGLDrawablePropertyColorFormat: kEAGLColorFormatRGBA8]
+        eaglLayer.contentsGravity = kCAGravityResizeAspectFill // Just for safety to prevent distortion
         
         self.internalLayer = eaglLayer
     }
@@ -71,21 +73,6 @@ public class RenderView:UIView, ImageConsumer {
     deinit {
         sharedImageProcessingContext.runOperationSynchronously{
             destroyDisplayFramebuffer()
-        }
-    }
-    
-    var waitingForTransaction = false
-    func presentWithTransaction() {
-        if #available(iOS 9.0, *) {
-            self.internalLayer.presentsWithTransaction = true
-            self.waitingForTransaction = true
-            
-            CATransaction.begin()
-            CATransaction.setCompletionBlock({
-                self.internalLayer.presentsWithTransaction = false
-                self.waitingForTransaction = false
-            })
-            CATransaction.commit()
         }
     }
     
@@ -103,6 +90,9 @@ public class RenderView:UIView, ImageConsumer {
         // Without the flush I occasionally get a warning from UIKit on the camera renderView and
         // when the warning comes in the renderView just stays black. This happens rarely but often enough to be a problem.
         // I tried a transaction and it doesn't silence it and this is likely why --> http://danielkbx.com/post/108060601989/catransaction-flush
+        // This is also very important because it guarantees the view is layed out at the correct size before it is drawn to.
+        // Its possible the size of the view was changed right before this was called which would result in us drawing to the view at the old size
+        // and then the view size would change to the new size at the next layout pass and distort our already drawn image.
         CATransaction.flush()
         sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.internalLayer)
         
@@ -129,21 +119,6 @@ public class RenderView:UIView, ImageConsumer {
             return false
         }
         
-        // Prevent the first frame from prematurely drawing before the view is drawn to the screen at the right size
-        // Aka we want to briefly synchronize UIKit with OpenGL. OpenGL draws immediately but UIKit draws in cycles.
-        // Note: We have to wait for the transaction to finish (aka for the drawing cycle to finish) before we disable this
-        // we can't just disable presentsWithTransaction after the first frame because it may even take a couple frames for
-        // a UIKit drawing cycle to complete (rarely but sometimes)
-        // Without this you will get weird content flashes when switching between videos of different size
-        // since the content will be drawn into a view that which although has the right frame/bounds it is not
-        // yet actually reflected on the screen. OpenGL would just draw right into the wrongly displayed view
-        // as soon as presentBufferForDisplay() is called.
-        // Source --> https://stackoverflow.com/a/30722276/1275014
-        // Source --> https://developer.apple.com/documentation/quartzcore/caeagllayer/1618676-presentswithtransaction
-        if(shouldPresentWithTransaction) {
-            self.presentWithTransaction()
-        }
-        
         return true
     }
     
@@ -167,51 +142,46 @@ public class RenderView:UIView, ImageConsumer {
     
     public func newFramebufferAvailable(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
         let work: () -> Void = {
-            // Don't bog down UIKIt with a bunch of framebuffers if we are waiting for a transaction to complete
-            // otherwise we will block the main thread as it trys to catch up.
-            if (self.waitingForTransaction && self.waitsForTransaction) {
+            if (self.displayFramebuffer == nil && !self.createDisplayFramebuffer()) {
+                // Bail if we couldn't successfully create the displayFramebuffer
                 framebuffer.unlock()
                 return
             }
+            self.activateDisplayFramebuffer()
             
-            self.delegate?.willDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+            clearFramebufferWithColor(self.backgroundRenderColor)
             
-            sharedImageProcessingContext.runOperationAsynchronously {
-                if (self.displayFramebuffer == nil && !self.createDisplayFramebuffer()) {
-                    // Bail if we couldn't successfully create the displayFramebuffer
-                    framebuffer.unlock()
-                    return
-                }
-                self.activateDisplayFramebuffer()
-                
-                clearFramebufferWithColor(self.backgroundRenderColor)
-                
-                let scaledVertices = self.fillMode.transformVertices(verticallyInvertedImageVertices, fromInputSize:framebuffer.sizeForTargetOrientation(self.orientation), toFitSize:self.backingSize)
-                renderQuadWithShader(self.displayShader, vertices:scaledVertices, inputTextures:[framebuffer.texturePropertiesForTargetOrientation(self.orientation)])
-                
-                glBindRenderbuffer(GLenum(GL_RENDERBUFFER), self.displayRenderbuffer!)
-                
-                sharedImageProcessingContext.presentBufferForDisplay()
-                
-                if(self.delegate?.shouldDisplayNextFramebufferOnMainThread() ?? false) {
-                    DispatchQueue.main.async {
-                        self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
-                        framebuffer.unlock()
-                    }
-                }
-                else {
+            let scaledVertices = self.fillMode.transformVertices(verticallyInvertedImageVertices, fromInputSize:framebuffer.sizeForTargetOrientation(self.orientation), toFitSize:self.backingSize)
+            renderQuadWithShader(self.displayShader, vertices:scaledVertices, inputTextures:[framebuffer.texturePropertiesForTargetOrientation(self.orientation)])
+            
+            glBindRenderbuffer(GLenum(GL_RENDERBUFFER), self.displayRenderbuffer!)
+            
+            sharedImageProcessingContext.presentBufferForDisplay()
+            
+            if(self.delegate?.shouldDisplayNextFramebufferAfterMainThreadLoop() ?? false) {
+                DispatchQueue.main.async {
                     self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
                     framebuffer.unlock()
                 }
             }
+            else {
+                self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+                framebuffer.unlock()
+            }
         }
         
-        if(self.delegate?.shouldDisplayNextFramebufferOnMainThread() ?? false) {
+        if(self.delegate?.shouldDisplayNextFramebufferAfterMainThreadLoop() ?? false) {
             // CAUTION: Never call sync from the sharedImageProcessingContext, it will cause cyclic thread deadlocks
             // If you are curious, change this to sync, then try trimming/scrubbing a video
             // Before that happens you will get a deadlock when someone calls runOperationSynchronously since the main thread is blocked
             // There is a way to get around this but then the first thing mentioned will happen
-            DispatchQueue.main.async(execute: work)
+            DispatchQueue.main.async {
+                self.delegate?.willDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+                
+                sharedImageProcessingContext.runOperationAsynchronously {
+                    work()
+                }
+            }
         }
         else {
             work()
