@@ -14,8 +14,11 @@ public class MovieInput: ImageSource {
     
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
-            guard let audioEncodingTarget = audioEncodingTarget else {
-                return
+            guard let audioEncodingTarget = audioEncodingTarget,
+                self.asset.tracks(withMediaType: AVMediaTypeAudio).count > 0 else {
+                    // Make sure we don't activate the audio track if the asset doesn't have audio
+                    // Otherwise the MovieOutput may wait for audio samples to complete the ideal interleaving pattern
+                    return
             }
             audioEncodingTarget.activateAudioTrack()
             

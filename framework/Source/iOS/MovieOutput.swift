@@ -132,6 +132,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                     
                     self.isRecording = true
                     
+                    self.synchronizedEncodingDebugPrint("MovieOutput started writing")
+                    
                     completionCallback?(true)
                 }
             } catch {
@@ -218,12 +220,12 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             do {
                 try NSObject.catchException {
                     if (!self.assetWriterPixelBufferInput.append(self.pixelBuffer!, withPresentationTime:frameTime)) {
-                        debugPrint("Problem appending pixel buffer at time: \(frameTime)")
+                        debugPrint("Trouble appending pixel buffer at time: \(frameTime)")
                     }
                 }
             }
             catch {
-                print("Trouble appending audio sample buffer: \(error)")
+                print("Trouble appending pixel buffer: \(error)")
             }
             
             CVPixelBufferUnlockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
