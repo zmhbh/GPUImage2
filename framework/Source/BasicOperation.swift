@@ -148,6 +148,9 @@ open class BasicOperation: ImageProcessingOperation {
                 remainingFramebuffers[key] = framebuffer
             }
         }
+        
+        renderFramebuffer.userInfo = inputFramebuffers[0]!.userInfo
+        
         inputFramebuffers = remainingFramebuffers
     }
     

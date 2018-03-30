@@ -4,8 +4,6 @@ public protocol MovieInputDelegate: class {
     func didFinishMovie()
 }
 
-let synchronizedEncodingDebug = false
-
 public class MovieInput: ImageSource {
     public let targets = TargetContainer()
     public var runBenchmark = false
@@ -14,11 +12,8 @@ public class MovieInput: ImageSource {
     
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
-            guard let audioEncodingTarget = audioEncodingTarget,
-                self.asset.tracks(withMediaType: AVMediaTypeAudio).count > 0 else {
-                    // Make sure we don't activate the audio track if the asset doesn't have audio
-                    // Otherwise the MovieOutput may wait for audio samples to complete the ideal interleaving pattern
-                    return
+            guard let audioEncodingTarget = audioEncodingTarget else {
+                return
             }
             audioEncodingTarget.activateAudioTrack()
             
@@ -54,6 +49,11 @@ public class MovieInput: ImageSource {
             self.enableSynchronizedEncoding()
         }
     }
+    public var synchronizedEncodingDebug = false {
+        didSet {
+            self.synchronizedMovieOutput?.synchronizedEncodingDebug = self.synchronizedEncodingDebug
+        }
+    }
     let conditionLock = NSCondition()
     var readingShouldWait = false
     var videoInputStatusObserver:NSKeyValueObservation?
@@ -63,12 +63,13 @@ public class MovieInput: ImageSource {
     var timebaseInfo = mach_timebase_info_data_t()
     var currentThread:Thread?
     
-    var numberOfFramesCaptured = 0
+    var totalFramesSent = 0
     var totalFrameTimeDuringCapture:Double = 0.0
     
     var audioSettings:[String:Any]?
     
     var movieFramebuffer:Framebuffer?
+    public var framebufferUserInfo:[AnyHashable:Any]?
     
     // TODO: Someone will have to add back in the AVPlayerItem logic, because I don't know how that works
     public init(asset:AVAsset, videoComposition: AVVideoComposition?, playAtActualSpeed:Bool = false, loop:Bool = false, audioSettings:[String:Any]? = nil) throws {
@@ -261,6 +262,7 @@ public class MovieInput: ImageSource {
                 self.completion?()
                 
                 self.synchronizedEncodingDebugPrint("MovieInput finished reading")
+                self.synchronizedEncodingDebugPrint("MovieInput total frames sent: \(self.totalFramesSent)")
             }
         }
     }
@@ -278,6 +280,7 @@ public class MovieInput: ImageSource {
             }
             return
         }
+        
         
         self.synchronizedEncodingDebugPrint("Process frame input")
         
@@ -425,15 +428,19 @@ public class MovieInput: ImageSource {
         CVPixelBufferUnlockBaseAddress(movieFrame, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
         
         movieFramebuffer.timingStyle = .videoFrame(timestamp:Timestamp(withSampleTime))
+        movieFramebuffer.userInfo = self.framebufferUserInfo
         self.movieFramebuffer = movieFramebuffer
         
         self.updateTargetsWithFramebuffer(movieFramebuffer)
         
+        if(self.runBenchmark || self.synchronizedEncodingDebug) {
+            self.totalFramesSent += 1
+        }
+        
         if self.runBenchmark {
             let currentFrameTime = (CFAbsoluteTimeGetCurrent() - startTime)
-            self.numberOfFramesCaptured += 1
             self.totalFrameTimeDuringCapture += currentFrameTime
-            print("Average frame time : \(1000.0 * self.totalFrameTimeDuringCapture / Double(self.numberOfFramesCaptured)) ms")
+            print("Average frame time : \(1000.0 * self.totalFrameTimeDuringCapture / Double(self.totalFramesSent)) ms")
             print("Current frame time : \(1000.0 * currentFrameTime) ms")
         }
     }
@@ -455,6 +462,7 @@ public class MovieInput: ImageSource {
     
     func enableSynchronizedEncoding() {
         self.synchronizedMovieOutput?.encodingLiveVideo = false
+        self.synchronizedMovieOutput?.synchronizedEncodingDebug = self.synchronizedEncodingDebug
         self.playAtActualSpeed = false
         self.loop = false
         

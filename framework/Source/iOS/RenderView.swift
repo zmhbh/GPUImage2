@@ -184,6 +184,8 @@ public class RenderView:UIView, ImageConsumer {
             }
         }
         else {
+            self.delegate?.willDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+            
             work()
         }
     }

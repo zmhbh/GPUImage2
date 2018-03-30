@@ -4,6 +4,7 @@ import UIKit
 public class PictureInput: ImageSource {
     public let targets = TargetContainer()
     var imageFramebuffer:Framebuffer?
+    public var framebufferUserInfo:[AnyHashable:Any]?
     var hasProcessedImage:Bool = false
     
     public init(image:CGImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
@@ -94,7 +95,6 @@ public class PictureInput: ImageSource {
             // TODO: Alter orientation based on metadata from photo
             self.imageFramebuffer = try Framebuffer(context:sharedImageProcessingContext, orientation:orientation, size:GLSize(width:widthToUseForTexture, height:heightToUseForTexture), textureOnly:true)
             self.imageFramebuffer!.lock()
-
             
             glBindTexture(GLenum(GL_TEXTURE_2D), self.imageFramebuffer!.texture)
             if (smoothlyScaleOutput) {
@@ -131,6 +131,8 @@ public class PictureInput: ImageSource {
     }
     
     public func processImage(synchronously:Bool = false) {
+        self.imageFramebuffer?.userInfo = self.framebufferUserInfo
+        
         if synchronously {
             sharedImageProcessingContext.runOperationSynchronously{
                 if let framebuffer = self.imageFramebuffer {

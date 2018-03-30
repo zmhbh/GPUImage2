@@ -46,7 +46,8 @@ public enum FramebufferTimingStyle {
 public class Framebuffer {
     public var timingStyle:FramebufferTimingStyle = .stillImage
     public var orientation:ImageOrientation
-
+    public var userInfo:[AnyHashable:Any]?
+    
     public let texture:GLuint
     let framebuffer:GLuint?
     let stencilBuffer:GLuint?

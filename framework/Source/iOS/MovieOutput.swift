@@ -40,9 +40,11 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     
     let movieProcessingContext:OpenGLContext
     
-    public init(URL:Foundation.URL, size:Size, fileType:String = AVFileTypeQuickTimeMovie, liveVideo:Bool = false, videoSettings:[String:Any]? = nil, audioSettings:[String:Any]? = nil) throws {
+    var synchronizedEncodingDebug = false
+    var totalFramesAppended:Int = 0
+    
+    public init(URL:Foundation.URL, size:Size, fileType:String = AVFileTypeQuickTimeMovie, liveVideo:Bool = false, videoSettings:[String:Any]? = nil, videoNaturalTimeScale:CMTimeScale? = nil, audioSettings:[String:Any]? = nil) throws {
         imageProcessingShareGroup = sharedImageProcessingContext.context.sharegroup
-        // Since we cannot access self before calling super, initialize this here and not above.
         let movieProcessingContext = OpenGLContext()
         
         if movieProcessingContext.supportsTextureCaches() {
@@ -54,8 +56,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         self.size = size
         
         assetWriter = try AVAssetWriter(url:URL, fileType:fileType)
-        // Set this to make sure that a functional movie is produced, even if the recording is cut off mid-stream. Only the last 1/4 second should be lost in that case.
-        assetWriter.movieFragmentInterval = CMTimeMakeWithSeconds(1, 1000)
         
         var localSettings:[String:Any]
         if let videoSettings = videoSettings {
@@ -70,6 +70,19 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         
         assetWriterVideoInput = AVAssetWriterInput(mediaType:AVMediaTypeVideo, outputSettings:localSettings)
         assetWriterVideoInput.expectsMediaDataInRealTime = liveVideo
+        
+        // You should provide a naturalTimeScale if you have one for the current media.
+        // Otherwise the asset writer will choose one for you and it may result in misaligned frames.
+        if let naturalTimeScale = videoNaturalTimeScale {
+            assetWriter.movieTimeScale = naturalTimeScale
+            assetWriterVideoInput.mediaTimeScale = naturalTimeScale
+            // This is set to make sure that a functional movie is produced, even if the recording is cut off mid-stream. Only the last second should be lost in that case.
+            assetWriter.movieFragmentInterval = CMTimeMakeWithSeconds(1, naturalTimeScale)
+        }
+        else {
+            assetWriter.movieFragmentInterval = CMTimeMakeWithSeconds(1, 1000)
+        }
+        
         encodingLiveVideo = liveVideo
         
         // You need to use BGRA for the video in order to get realtime encoding. I use a color-swizzling shader to line up glReadPixels' normal RGBA output with the movie input's BGRA.
@@ -87,7 +100,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     
     public func startRecording(_ completionCallback:((_ started: Bool) -> Void)? = nil) {
         // Don't do this work on the movieProcessingContext que so we don't block it.
-        // If it does get blocked framebuffers will pile up and after it is no longer blocked/this work has finished
+        // If it does get blocked framebuffers will pile up from live video and after it is no longer blocked (this work has finished)
         // we will be able to accept framebuffers but the ones that piled up will come in too quickly resulting in most being dropped.
         DispatchQueue.global(qos: .utility).async {
             do {
@@ -101,43 +114,24 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 }
                 
                 guard let pixelBufferPool = self.assetWriterPixelBufferInput.pixelBufferPool else {
-                    // When the pixelBufferPool returns nil, check the following:
-                    // https://stackoverflow.com/a/20110179/1275014
+                    /*
+                    When the pixelBufferPool returns nil, check the following:
+                    1. the the output file of the AVAssetsWriter doesn't exist.
+                    2. use the pixelbuffer after calling startSessionAtTime: on the AVAssetsWriter.
+                    3. the settings of AVAssetWriterInput and AVAssetWriterInputPixelBufferAdaptor are correct.
+                    4. the present times of appendPixelBuffer uses are not the same.
+                    https://stackoverflow.com/a/20110179/1275014
+                    */
                     throw "Pixel buffer pool was nil"
                 }
-                
-                CVPixelBufferPoolCreatePixelBuffer(nil, pixelBufferPool, &self.pixelBuffer)
-                
-                guard let pixelBuffer = self.pixelBuffer else {
-                    throw "Unable to create pixel buffer"
-                }
-                
-                /* AVAssetWriter will use BT.601 conversion matrix for RGB to YCbCr conversion
-                 * regardless of the kCVImageBufferYCbCrMatrixKey value.
-                 * Tagging the resulting video file as BT.601, is the best option right now.
-                 * Creating a proper BT.709 video is not possible at the moment.
-                 */
-                CVBufferSetAttachment(pixelBuffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2, .shouldPropagate)
-                CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
-                CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
-                
-                // This work must be done on the movieProcessingContext since we access openGL.
-                try self.movieProcessingContext.runOperationSynchronously {
-                    let bufferSize = GLSize(self.size)
-                    var cachedTextureRef:CVOpenGLESTexture? = nil
-                    let _ = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, self.movieProcessingContext.coreVideoTextureCache, pixelBuffer, nil, GLenum(GL_TEXTURE_2D), GL_RGBA, bufferSize.width, bufferSize.height, GLenum(GL_BGRA), GLenum(GL_UNSIGNED_BYTE), 0, &cachedTextureRef)
-                    let cachedTexture = CVOpenGLESTextureGetName(cachedTextureRef!)
                     
-                    self.renderFramebuffer = try Framebuffer(context:self.movieProcessingContext, orientation:.portrait, size:bufferSize, textureOnly:false, overriddenTexture:cachedTexture)
-                    
-                    self.isRecording = true
-                    
-                    self.synchronizedEncodingDebugPrint("MovieOutput started writing")
-                    
-                    completionCallback?(true)
-                }
+                self.isRecording = true
+                
+                self.synchronizedEncodingDebugPrint("MovieOutput started writing")
+                
+                completionCallback?(true)
             } catch {
-                print("Unable to start recording: \(error)")
+                print("MovieOutput unable to start writing: \(error)")
                 
                 self.assetWriter.cancelWriting()
                 
@@ -160,8 +154,10 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             self.isRecording = false
             
             if let lastFrame = self.previousFrameTime {
-                // Resolve black frames at the end. If we only call finishWriting() the session's effective end time
-                // will be the latest end timestamp of the session's samples which could be either video or audio.
+                // Resolve black frames at the end. Without this the end timestamp of the session's samples could be either video or audio.
+                // Documentation: "You do not need to call this method; if you call finishWriting without
+                // calling this method, the session's effective end time will be the latest end timestamp of
+                // the session's samples (that is, no samples will be edited out at the end)."
                 self.assetWriter.endSession(atSourceTime: lastFrame)
             }
             
@@ -169,6 +165,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 completionCallback?()
             }
             self.synchronizedEncodingDebugPrint("MovieOutput finished writing")
+            self.synchronizedEncodingDebugPrint("MovieOutput total frames appended: \(self.totalFramesAppended)")
         }
     }
     
@@ -197,7 +194,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             self.previousFrameTime = frameTime
 
             guard (self.assetWriterVideoInput.isReadyForMoreMediaData || !self.encodingLiveVideo) else {
-                debugPrint("Had to drop a frame at time \(frameTime)")
+                print("Had to drop a frame at time \(frameTime)")
                 return
             }
             
@@ -208,30 +205,33 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 usleep(100000) // 0.1 seconds
             }
             
-            if !self.movieProcessingContext.supportsTextureCaches() {
-                let pixelBufferStatus = CVPixelBufferPoolCreatePixelBuffer(nil, self.assetWriterPixelBufferInput.pixelBufferPool!, &self.pixelBuffer)
-                guard ((self.pixelBuffer != nil) && (pixelBufferStatus == kCVReturnSuccess)) else { return }
+            let pixelBufferStatus = CVPixelBufferPoolCreatePixelBuffer(nil, self.assetWriterPixelBufferInput.pixelBufferPool!, &self.pixelBuffer)
+            guard ((self.pixelBuffer != nil) && (pixelBufferStatus == kCVReturnSuccess)) else {
+                print("WARNING: Unable to create pixel buffer, dropping frame")
+                return
             }
             
-            self.renderIntoPixelBuffer(self.pixelBuffer!, framebuffer:framebuffer)
-            
-            self.synchronizedEncodingDebugPrint("Process frame output")
-            
             do {
+                try self.renderIntoPixelBuffer(self.pixelBuffer!, framebuffer:framebuffer)
+                
+                self.synchronizedEncodingDebugPrint("Process frame output")
+                
                 try NSObject.catchException {
                     if (!self.assetWriterPixelBufferInput.append(self.pixelBuffer!, withPresentationTime:frameTime)) {
-                        debugPrint("Trouble appending pixel buffer at time: \(frameTime)")
+                        print("WARNING: Trouble appending pixel buffer at time: \(frameTime) \(self.assetWriter.error)")
                     }
                 }
             }
             catch {
-                print("Trouble appending pixel buffer: \(error)")
+                print("WARNING: Trouble appending pixel buffer at time: \(frameTime) \(error)")
+            }
+            
+            if(self.synchronizedEncodingDebug) {
+                self.totalFramesAppended += 1
             }
             
             CVPixelBufferUnlockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
-            if !self.movieProcessingContext.supportsTextureCaches() {
-                self.pixelBuffer = nil
-            }
+            self.pixelBuffer = nil
             
             sharedImageProcessingContext.runOperationAsynchronously {
                 framebuffer.unlock()
@@ -252,11 +252,20 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         }
     }
     
-    func renderIntoPixelBuffer(_ pixelBuffer:CVPixelBuffer, framebuffer:Framebuffer) {
-        if !movieProcessingContext.supportsTextureCaches() {
-            renderFramebuffer = movieProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:framebuffer.orientation, size:GLSize(self.size))
-            renderFramebuffer.lock()
+    func renderIntoPixelBuffer(_ pixelBuffer:CVPixelBuffer, framebuffer:Framebuffer) throws {
+        // Is this the first pixel buffer we have recieved?
+        if(renderFramebuffer == nil) {
+            CVBufferSetAttachment(pixelBuffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2, .shouldPropagate)
+            CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
+            CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
         }
+        
+        let bufferSize = GLSize(self.size)
+        var cachedTextureRef:CVOpenGLESTexture? = nil
+        let _ = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, self.movieProcessingContext.coreVideoTextureCache, pixelBuffer, nil, GLenum(GL_TEXTURE_2D), GL_RGBA, bufferSize.width, bufferSize.height, GLenum(GL_BGRA), GLenum(GL_UNSIGNED_BYTE), 0, &cachedTextureRef)
+        let cachedTexture = CVOpenGLESTextureGetName(cachedTextureRef!)
+        
+        renderFramebuffer = try? Framebuffer(context:self.movieProcessingContext, orientation:.portrait, size:bufferSize, textureOnly:false, overriddenTexture:cachedTexture)
         
         renderFramebuffer.activateFramebufferForRendering()
         clearFramebufferWithColor(Color.black)
@@ -267,7 +276,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             glFinish()
         } else {
             glReadPixels(0, 0, renderFramebuffer.size.width, renderFramebuffer.size.height, GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), CVPixelBufferGetBaseAddress(pixelBuffer))
-            renderFramebuffer.unlock()
         }
     }
     
@@ -291,12 +299,15 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             guard self.isRecording,
                 self.assetWriter.status == .writing,
                 !self.audioEncodingIsFinished,
-                let assetWriterAudioInput = self.assetWriterAudioInput else { return }
+                let assetWriterAudioInput = self.assetWriterAudioInput else {
+                    self.synchronizedEncodingDebugPrint("Guard fell through, dropping audio sample")
+                    return
+            }
             
             let currentSampleTime = CMSampleBufferGetOutputPresentationTimeStamp(sampleBuffer)
             
             guard (assetWriterAudioInput.isReadyForMoreMediaData || !self.encodingLiveVideo) else {
-                debugPrint("Had to drop a audio sample at time \(currentSampleTime)")
+                print("Had to drop a audio sample at time \(currentSampleTime)")
                 return
             }
             
@@ -310,12 +321,12 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             do {
                 try NSObject.catchException {
                     if (!assetWriterAudioInput.append(sampleBuffer)) {
-                        print("Trouble appending audio sample buffer: \(String(describing: self.assetWriter.error))")
+                        print("WARNING: Trouble appending audio sample buffer: \(String(describing: self.assetWriter.error))")
                     }
                 }
             }
             catch {
-                print("Trouble appending audio sample buffer: \(error)")
+                print("WARNING: Trouble appending audio sample buffer: \(error)")
             }
         }
         
@@ -327,7 +338,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         }
     }
     
-    // Note: This is not used for synchronized encoding.
+    // Note: This is not used for synchronized encoding, only live video.
     public func readyForNextAudioBuffer() -> Bool {
         return true
     }
