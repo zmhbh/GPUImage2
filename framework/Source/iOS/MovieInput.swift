@@ -184,7 +184,7 @@ public class MovieInput: ImageSource {
             thread.qualityOfService = .userInitiated
         }
         else {
-             // This includes syncronized encoding since the above vars will be disabled for it.
+             // This includes synchronized encoding since the above vars will be disabled for it.
             thread.qualityOfService = .default
         }
         

@@ -1,6 +1,27 @@
 import OpenGLES
 import UIKit
 
+public enum PictureInputError: Error, CustomStringConvertible {
+    case zeroSizedImageError
+    case dataProviderNilError
+    case noSuchImageError(imageName: String)
+    
+    public var errorDescription: String {
+        switch self {
+        case .zeroSizedImageError:
+            return "Tried to pass in a zero-sized image"
+        case .dataProviderNilError:
+            return "Unable to retrieve image dataProvider"
+        case .noSuchImageError(let imageName):
+            return "No such image named: \(imageName) in your application bundle"
+        }
+    }
+    
+    public var description: String {
+        return "<\(type(of: self)): errorDescription = \(self.errorDescription)>"
+    }
+}
+
 public class PictureInput: ImageSource {
     public let targets = TargetContainer()
     var imageFramebuffer:Framebuffer?
@@ -12,7 +33,7 @@ public class PictureInput: ImageSource {
         let heightOfImage = GLint(image.height)
         
         // If passed an empty image reference, CGContextDrawImage will fail in future versions of the SDK.
-        guard((widthOfImage > 0) && (heightOfImage > 0)) else { throw "Tried to pass in a zero-sized image" }
+        guard((widthOfImage > 0) && (heightOfImage > 0)) else { throw PictureInputError.zeroSizedImageError }
         
         var widthToUseForTexture = widthOfImage
         var heightToUseForTexture = heightOfImage
@@ -87,7 +108,7 @@ public class PictureInput: ImageSource {
                 imageContext?.draw(image, in:CGRect(x:0.0, y:0.0, width:CGFloat(widthToUseForTexture), height:CGFloat(heightToUseForTexture)))
             } else {
                 // Access the raw image bytes directly
-                guard let data = image.dataProvider?.data else { throw "Unable to retrieve image dataProvider" }
+                guard let data = image.dataProvider?.data else { throw PictureInputError.dataProviderNilError }
                 dataFromImageDataProvider = data
                 imageData = UnsafeMutablePointer<GLubyte>(mutating:CFDataGetBytePtr(dataFromImageDataProvider))
             }
@@ -120,7 +141,7 @@ public class PictureInput: ImageSource {
     }
     
     public convenience init(imageName:String, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
-        guard let image = UIImage(named:imageName) else { throw "No such image named: \(imageName) in your application bundle" }
+        guard let image = UIImage(named:imageName) else { throw PictureInputError.noSuchImageError(imageName: imageName) }
         try self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
     }
     

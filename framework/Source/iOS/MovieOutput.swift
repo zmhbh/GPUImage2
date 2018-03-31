@@ -1,14 +1,28 @@
 import AVFoundation
 
-extension String: LocalizedError {
-    public var errorDescription: String? { return self }
-}
-
 public protocol AudioEncodingTarget {
     func activateAudioTrack()
     func processAudioBuffer(_ sampleBuffer:CMSampleBuffer, shouldInvalidateSampleWhenDone:Bool)
     // Note: This is not used for synchronized encoding.
     func readyForNextAudioBuffer() -> Bool
+}
+
+enum MovieOutputError: Error, CustomStringConvertible {
+    case startWritingError(assetWriterError: Error?)
+    case pixelBufferPoolNilError
+    
+    public var errorDescription: String {
+        switch self {
+        case .startWritingError(let assetWriterError):
+            return "Could not start asset writer: \(String(describing: assetWriterError))"
+        case .pixelBufferPoolNilError:
+            return "Asset writer pixel buffer pool was nil. Make sure that your output file doesn't already exist."
+        }
+    }
+    
+    public var description: String {
+        return "<\(type(of: self)): errorDescription = \(self.errorDescription)>"
+    }
 }
 
 public class MovieOutput: ImageConsumer, AudioEncodingTarget {
@@ -99,7 +113,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     }
     
     public func startRecording(_ completionCallback:((_ started: Bool) -> Void)? = nil) {
-        // Don't do this work on the movieProcessingContext que so we don't block it.
+        // Don't do this work on the movieProcessingContext queue so we don't block it.
         // If it does get blocked framebuffers will pile up from live video and after it is no longer blocked (this work has finished)
         // we will be able to accept framebuffers but the ones that piled up will come in too quickly resulting in most being dropped.
         DispatchQueue.global(qos: .utility).async {
@@ -110,7 +124,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 }
                 
                 if(!success) {
-                    throw "Could not start asset writer: \(String(describing: self.assetWriter.error))"
+                    throw MovieOutputError.startWritingError(assetWriterError: self.assetWriter.error)
                 }
                 
                 guard let pixelBufferPool = self.assetWriterPixelBufferInput.pixelBufferPool else {
@@ -122,7 +136,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                     4. the present times of appendPixelBuffer uses are not the same.
                     https://stackoverflow.com/a/20110179/1275014
                     */
-                    throw "Pixel buffer pool was nil"
+                    throw MovieOutputError.pixelBufferPoolNilError
                 }
                     
                 self.isRecording = true
@@ -246,8 +260,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         }
         else {
             // This is done synchronously to prevent framebuffers from piling up during synchronized encoding.
-            // If we don't force the sharedImageProcessingContext que to wait for this frame to finish processing it will
-            // keep sending frames whenever isReadyForMoreMediaData = true but the movieProcessingContext que would run when the system wants it to.
+            // If we don't force the sharedImageProcessingContext queue to wait for this frame to finish processing it will
+            // keep sending frames whenever isReadyForMoreMediaData = true but the movieProcessingContext queue would run when the system wants it to.
             movieProcessingContext.runOperationSynchronously(work)
         }
     }
