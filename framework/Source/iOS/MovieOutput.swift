@@ -279,7 +279,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         let _ = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, self.movieProcessingContext.coreVideoTextureCache, pixelBuffer, nil, GLenum(GL_TEXTURE_2D), GL_RGBA, bufferSize.width, bufferSize.height, GLenum(GL_BGRA), GLenum(GL_UNSIGNED_BYTE), 0, &cachedTextureRef)
         let cachedTexture = CVOpenGLESTextureGetName(cachedTextureRef!)
         
-        renderFramebuffer = try? Framebuffer(context:self.movieProcessingContext, orientation:.portrait, size:bufferSize, textureOnly:false, overriddenTexture:cachedTexture)
+        renderFramebuffer = try Framebuffer(context:self.movieProcessingContext, orientation:.portrait, size:bufferSize, textureOnly:false, overriddenTexture:cachedTexture)
         
         renderFramebuffer.activateFramebufferForRendering()
         clearFramebufferWithColor(Color.black)
