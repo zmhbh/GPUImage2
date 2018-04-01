@@ -81,10 +81,10 @@ public class MovieInput: ImageSource {
         self.audioSettings = audioSettings
     }
 
-    public convenience init(url:URL, playAtActualSpeed:Bool = false, loop:Bool = false) throws {
+    public convenience init(url:URL, playAtActualSpeed:Bool = false, loop:Bool = false, audioSettings:[String:Any]? = nil) throws {
         let inputOptions = [AVURLAssetPreferPreciseDurationAndTimingKey:NSNumber(value:true)]
         let inputAsset = AVURLAsset(url:url, options:inputOptions)
-        try self.init(asset:inputAsset, videoComposition: nil, playAtActualSpeed:playAtActualSpeed, loop:loop)
+        try self.init(asset:inputAsset, videoComposition: nil, playAtActualSpeed:playAtActualSpeed, loop:loop, audioSettings:audioSettings)
     }
     
     deinit {

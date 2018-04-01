@@ -60,7 +60,7 @@ public class SpeakerOutput: AudioEncodingTarget {
         }
         TPCircularBufferCleanup(&circularBuffer)
         
-        self.stop()
+        self.cancel()
     }
     
     // MARK: -
@@ -74,7 +74,7 @@ public class SpeakerOutput: AudioEncodingTarget {
         isPlaying = true
     }
     
-    public func stop() {
+    public func cancel() {
         if(!isPlaying || processingGraph == nil) { return }
         
         AUGraphStop(processingGraph!)
