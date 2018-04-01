@@ -54,8 +54,6 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     public var audioEncodingTarget:AudioEncodingTarget? {
         didSet {
             guard let audioEncodingTarget = audioEncodingTarget else {
-                // Removing the audio inputs and outputs causes a black flash on the video output
-                //self.removeAudioInputsAndOutputs()
                 return
             }
             do {

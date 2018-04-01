@@ -127,7 +127,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                     throw MovieOutputError.startWritingError(assetWriterError: self.assetWriter.error)
                 }
                 
-                guard let pixelBufferPool = self.assetWriterPixelBufferInput.pixelBufferPool else {
+                guard self.assetWriterPixelBufferInput.pixelBufferPool != nil else {
                     /*
                     When the pixelBufferPool returns nil, check the following:
                     1. the the output file of the AVAssetsWriter doesn't exist.
@@ -232,7 +232,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 
                 try NSObject.catchException {
                     if (!self.assetWriterPixelBufferInput.append(self.pixelBuffer!, withPresentationTime:frameTime)) {
-                        print("WARNING: Trouble appending pixel buffer at time: \(frameTime) \(self.assetWriter.error)")
+                        print("WARNING: Trouble appending pixel buffer at time: \(frameTime) \(String(describing: self.assetWriter.error))")
                     }
                 }
             }
