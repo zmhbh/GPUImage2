@@ -87,12 +87,14 @@ public class RenderView:UIView, ImageConsumer {
         displayRenderbuffer = newDisplayRenderbuffer
         glBindRenderbuffer(GLenum(GL_RENDERBUFFER), displayRenderbuffer!)
         
-        // Without the flush I occasionally get a warning from UIKit on the camera renderView and
-        // when the warning comes in the renderView just stays black. This happens rarely but often enough to be a problem.
-        // I tried a transaction and it doesn't silence it and this is likely why --> http://danielkbx.com/post/108060601989/catransaction-flush
-        // This is also very important because it guarantees the view is layed out at the correct size before it is drawn to.
-        // Its possible the size of the view was changed right before this was called which would result in us drawing to the view at the old size
+        // Without the flush you will occasionally get a warning from UIKit and when that happens the RenderView just stays black.
+        // "CoreAnimation: [EAGLContext renderbufferStorage:fromDrawable:] was called from a non-main thread in an implicit transaction!
+        // Note that this may be unsafe without an explicit CATransaction or a call to [CATransaction flush]."
+        // I tried a transaction and that doesn't work and this is probably why --> http://danielkbx.com/post/108060601989/catransaction-flush
+        // Using flush is important because it guarantees the view is layed out at the correct size before it is drawn to since this is being done on a background thread.
+        // Its possible the size of the view was changed right before we got here and would result in us drawing to the view at the old size
         // and then the view size would change to the new size at the next layout pass and distort our already drawn image.
+        // Since we do not call this function often we do not need to worry about the performance impact of calling flush.
         CATransaction.flush()
         sharedImageProcessingContext.context.renderbufferStorage(Int(GL_RENDERBUFFER), from:self.internalLayer)
         
@@ -103,10 +105,10 @@ public class RenderView:UIView, ImageConsumer {
         backingSize = GLSize(width:backingWidth, height:backingHeight)
         
         guard (backingWidth > 0 && backingHeight > 0) else {
-            print("Warning: View had a zero size")
+            print("WARNING: View had a zero size")
             
             if(self.internalLayer.bounds.width > 0 && self.internalLayer.bounds.height > 0) {
-                print("Warning: View size \(self.internalLayer.bounds) may be too large ")
+                print("WARNING: View size \(self.internalLayer.bounds) may be too large ")
             }
             return false
         }
@@ -115,7 +117,7 @@ public class RenderView:UIView, ImageConsumer {
         
         let status = glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER))
         if (status != GLenum(GL_FRAMEBUFFER_COMPLETE)) {
-            print("Warning: Display framebuffer creation failed with error: \(FramebufferCreationError(errorCode:status))")
+            print("WARNING: Display framebuffer creation failed with error: \(FramebufferCreationError(errorCode:status))")
             return false
         }
         
