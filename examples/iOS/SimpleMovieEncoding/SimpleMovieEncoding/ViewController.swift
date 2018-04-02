@@ -37,7 +37,7 @@ class ViewController: UIViewController {
         guard let videoTrack = asset.tracks(withMediaType: AVMediaType.video).first else { return }
         let audioTrack = asset.tracks(withMediaType: AVMediaType.audio).first
         
-        // If you would like passthrough audio instead, use nil for both audioDecodingSettings and audioEncodingSettings
+        // If you would like passthrough audio instead, set both audioDecodingSettings and audioEncodingSettings to nil
         let audioDecodingSettings:[String:Any] = [AVFormatIDKey: kAudioFormatLinearPCM] // Noncompressed audio samples
         
         do {
@@ -100,7 +100,7 @@ class ViewController: UIViewController {
         
         movieOutput.startRecording() { started, error in
             if(!started) {
-                print("ERROR: MovieOutput unable to start writing: \(String(describing: error))")
+                print("ERROR: MovieOutput unable to start writing with error: \(String(describing: error))")
                 return
             }
             self.movieInput.start()
