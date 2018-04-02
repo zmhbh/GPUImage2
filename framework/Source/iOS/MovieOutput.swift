@@ -109,6 +109,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         assetWriter.add(assetWriterVideoInput)
         
         self.audioSettings = audioSettings
+        self.audioSourceFormatHint = audioSourceFormatHint
         
         self.movieProcessingContext = movieProcessingContext
     }

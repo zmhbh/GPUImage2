@@ -27,21 +27,45 @@ class ViewController: UIViewController {
         // The movie you want to reencode
         let movieURL = URL(string:"sample_iPod.m4v", relativeTo:bundleURL)!
         
-        let documentsDir = FileManager().urls(for: .documentDirectory, in: .userDomainMask).first!
+        let documentsDir = FileManager().urls(for:.documentDirectory, in:.userDomainMask).first!
         // The location you want to save the new video
         let exportedURL = URL(string:"test.mp4", relativeTo:documentsDir)!
         
         let inputOptions = [AVURLAssetPreferPreciseDurationAndTimingKey:NSNumber(value:true)]
         let asset = AVURLAsset(url:movieURL, options:inputOptions)
         
-        guard let videoTrack = asset.tracks(withMediaType: AVMediaType.video).first else { return }
-        let audioTrack = asset.tracks(withMediaType: AVMediaType.audio).first
+        guard let videoTrack = asset.tracks(withMediaType:AVMediaType.video).first else { return }
+        let audioTrack = asset.tracks(withMediaType:AVMediaType.audio).first
         
-        // If you would like passthrough audio instead, set both audioDecodingSettings and audioEncodingSettings to nil
-        let audioDecodingSettings:[String:Any] = [AVFormatIDKey: kAudioFormatLinearPCM] // Noncompressed audio samples
+        let audioDecodingSettings:[String:Any]?
+        let audioEncodingSettings:[String:Any]?
+        var audioSourceFormatHint:CMFormatDescription? = nil
+        
+        let shouldPassthroughAudio = false
+        if(shouldPassthroughAudio) {
+            audioDecodingSettings = nil
+            audioEncodingSettings = nil
+            // A format hint is required when writing to certain file types with passthrough audio
+            // A conditional downcast would not work here for some reason
+            if let description = audioTrack?.formatDescriptions.first { audioSourceFormatHint = (description as! CMFormatDescription) }
+        }
+        else {
+            audioDecodingSettings = [AVFormatIDKey:kAudioFormatLinearPCM] // Noncompressed audio samples
+            var acl = AudioChannelLayout()
+            memset(&acl, 0, MemoryLayout<AudioChannelLayout>.size)
+            acl.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
+            audioEncodingSettings = [
+                AVFormatIDKey:kAudioFormatMPEG4AAC,
+                AVNumberOfChannelsKey:2,
+                AVSampleRateKey:AVAudioSession.sharedInstance().sampleRate,
+                AVChannelLayoutKey:NSData(bytes:&acl, length:MemoryLayout<AudioChannelLayout>.size),
+                AVEncoderBitRateKey:96000
+            ]
+            audioSourceFormatHint = nil
+        }
         
         do {
-            movieInput = try MovieInput(asset: asset, videoComposition: nil, playAtActualSpeed: false, loop: false, audioSettings: audioDecodingSettings)
+            movieInput = try MovieInput(asset:asset, videoComposition:nil, playAtActualSpeed:false, loop:false, audioSettings:audioDecodingSettings)
         }
         catch {
             print("ERROR: Unable to setup MovieInput with error: \(error)")
@@ -50,28 +74,17 @@ class ViewController: UIViewController {
         
         try? FileManager().removeItem(at: exportedURL)
         
-        let videoEncodingSettings:[String:Any] = [AVVideoCompressionPropertiesKey: [
-                                                    AVVideoExpectedSourceFrameRateKey: videoTrack.nominalFrameRate,
-                                                    AVVideoAverageBitRateKey: videoTrack.estimatedDataRate,
-                                                    AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-                                                    AVVideoH264EntropyModeKey: AVVideoH264EntropyModeCABAC,
-                                                    AVVideoAllowFrameReorderingKey: videoTrack.requiresFrameReordering],
-                                                  AVVideoCodecKey: AVVideoCodecH264]
-        
-        var acl = AudioChannelLayout()
-        memset(&acl, 0, MemoryLayout<AudioChannelLayout>.size)
-        acl.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
-        
-        let audioEncodingSettings:[String:Any] = [
-            AVFormatIDKey:kAudioFormatMPEG4AAC,
-            AVNumberOfChannelsKey:2,
-            AVSampleRateKey:AVAudioSession.sharedInstance().sampleRate,
-            AVChannelLayoutKey:NSData(bytes:&acl, length:MemoryLayout<AudioChannelLayout>.size),
-            AVEncoderBitRateKey:96000
-        ]
+        let videoEncodingSettings:[String:Any] = [
+            AVVideoCompressionPropertiesKey: [
+                AVVideoExpectedSourceFrameRateKey:videoTrack.nominalFrameRate,
+                AVVideoAverageBitRateKey:videoTrack.estimatedDataRate,
+                AVVideoProfileLevelKey:AVVideoProfileLevelH264HighAutoLevel,
+                AVVideoH264EntropyModeKey:AVVideoH264EntropyModeCABAC,
+                AVVideoAllowFrameReorderingKey:videoTrack.requiresFrameReordering],
+            AVVideoCodecKey:AVVideoCodecH264]
         
         do {
-            movieOutput = try MovieOutput(URL: exportedURL, size: Size(width: Float(videoTrack.naturalSize.width), height: Float(videoTrack.naturalSize.height)), fileType: AVFileType.mp4.rawValue, liveVideo: false, videoSettings: videoEncodingSettings, videoNaturalTimeScale: videoTrack.naturalTimeScale, audioSettings: audioEncodingSettings)
+            movieOutput = try MovieOutput(URL: exportedURL, size:Size(width:Float(videoTrack.naturalSize.width), height:Float(videoTrack.naturalSize.height)), fileType:AVFileType.mp4.rawValue, liveVideo:false, videoSettings:videoEncodingSettings, videoNaturalTimeScale:videoTrack.naturalTimeScale, audioSettings:audioEncodingSettings, audioSourceFormatHint:audioSourceFormatHint)
         }
         catch {
             print("ERROR: Unable to setup MovieOutput with error: \(error)")

@@ -220,20 +220,20 @@ let bundleURL = Bundle.main.resourceURL!
 // The movie you want to reencode
 let movieURL = URL(string:"sample_iPod.m4v", relativeTo:bundleURL)!
 
-let documentsDir = FileManager().urls(for: .documentDirectory, in: .userDomainMask).first!
+let documentsDir = FileManager().urls(for:.documentDirectory, in:.userDomainMask).first!
 // The location you want to save the new video
 let exportedURL = URL(string:"test.mp4", relativeTo:documentsDir)!
 
 let asset = AVURLAsset(url:movieURL, options:[AVURLAssetPreferPreciseDurationAndTimingKey:NSNumber(value:true)])
 
-guard let videoTrack = asset.tracks(withMediaType: AVMediaType.video).first else { return }
-let audioTrack = asset.tracks(withMediaType: AVMediaType.audio).first
+guard let videoTrack = asset.tracks(withMediaType:AVMediaType.video).first else { return }
+let audioTrack = asset.tracks(withMediaType:AVMediaType.audio).first
 
 // If you would like passthrough audio instead, set both audioDecodingSettings and audioEncodingSettings to nil
-let audioDecodingSettings:[String:Any] = [AVFormatIDKey: kAudioFormatLinearPCM] // Noncompressed audio samples
+let audioDecodingSettings:[String:Any] = [AVFormatIDKey:kAudioFormatLinearPCM] // Noncompressed audio samples
 
 do {
-    movieInput = try MovieInput(asset: asset, videoComposition: nil, playAtActualSpeed: false, loop: false, audioSettings: audioDecodingSettings)
+    movieInput = try MovieInput(asset:asset, videoComposition:nil, playAtActualSpeed:false, loop:false, audioSettings:audioDecodingSettings)
 }
 catch {
     print("ERROR: Unable to setup MovieInput with error: \(error)")
@@ -242,18 +242,18 @@ catch {
 
 try? FileManager().removeItem(at: exportedURL)
 
-let videoEncodingSettings:[String:Any] = [AVVideoCompressionPropertiesKey: [
-                                            AVVideoExpectedSourceFrameRateKey: videoTrack.nominalFrameRate,
-                                            AVVideoAverageBitRateKey: videoTrack.estimatedDataRate,
-                                            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-                                            AVVideoH264EntropyModeKey: AVVideoH264EntropyModeCABAC,
-                                            AVVideoAllowFrameReorderingKey: videoTrack.requiresFrameReordering],
-                                        AVVideoCodecKey: AVVideoCodecH264]
+let videoEncodingSettings:[String:Any] = [
+    AVVideoCompressionPropertiesKey: [
+        AVVideoExpectedSourceFrameRateKey:videoTrack.nominalFrameRate,
+        AVVideoAverageBitRateKey:videoTrack.estimatedDataRate,
+        AVVideoProfileLevelKey:AVVideoProfileLevelH264HighAutoLevel,
+        AVVideoH264EntropyModeKey:AVVideoH264EntropyModeCABAC,
+        AVVideoAllowFrameReorderingKey:videoTrack.requiresFrameReordering],
+    AVVideoCodecKey:AVVideoCodecH264]
 
 var acl = AudioChannelLayout()
 memset(&acl, 0, MemoryLayout<AudioChannelLayout>.size)
 acl.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
-
 let audioEncodingSettings:[String:Any] = [
     AVFormatIDKey:kAudioFormatMPEG4AAC,
     AVNumberOfChannelsKey:2,
@@ -263,7 +263,7 @@ let audioEncodingSettings:[String:Any] = [
 ]
 
 do {
-    movieOutput = try MovieOutput(URL: exportedURL, size: Size(width: Float(videoTrack.naturalSize.width), height: Float(videoTrack.naturalSize.height)), fileType: AVFileType.mp4.rawValue, liveVideo: false, videoSettings: videoEncodingSettings, videoNaturalTimeScale: videoTrack.naturalTimeScale, audioSettings: audioEncodingSettings)
+    movieOutput = try MovieOutput(URL:exportedURL, size:Size(width:Float(videoTrack.naturalSize.width), height:Float(videoTrack.naturalSize.height)), fileType:AVFileType.mp4.rawValue, liveVideo:false, videoSettings:videoEncodingSettings, videoNaturalTimeScale:videoTrack.naturalTimeScale, audioSettings:audioEncodingSettings)
 }
 catch {
     print("ERROR: Unable to setup MovieOutput with error: \(error)")
@@ -278,9 +278,7 @@ movieInput --> filter --> movieOutput
 
 movieInput.completion = {
     self.movieOutput.finishRecording {
-        DispatchQueue.main.async {
-            print("Encoding finished")
-        }
+        print("Encoding finished")
     }
 }
 
@@ -294,7 +292,7 @@ movieOutput.startRecording() { started, error in
 }
 ```
 
- The above loads a movie named "sample_iPod.m4v" from the application's bundle, creates a saturation filter, and directs movie frames to be processed through the saturation filter on their way to the new file.
+ The above loads a movie named "sample_iPod.m4v" from the application's bundle, creates a saturation filter, and directs movie frames to be processed through the saturation filter on their way to the new file. In addition it writes the audio in AAC format to the new file.
 
 ### Writing a custom image processing operation ###
 
