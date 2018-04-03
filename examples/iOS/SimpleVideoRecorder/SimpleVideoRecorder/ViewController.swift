@@ -56,9 +56,10 @@ class ViewController: UIViewController {
                 movieOutput = try MovieOutput(URL:fileURL, size:Size(width:480, height:640), fileType:AVFileTypeMPEG4, liveVideo:true, videoSettings:videoSettings, audioSettings:audioSettings)
                 camera.audioEncodingTarget = movieOutput
                 filter --> movieOutput!
-                movieOutput!.startRecording() { started in
+                movieOutput!.startRecording() { started, error in
                     if(!started) {
                         self.isRecording = false
+                        fatalError("ERROR: Could not start writing with error: \(String(describing: error))")
                     }
                 }
                 DispatchQueue.main.async {
