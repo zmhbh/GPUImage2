@@ -177,9 +177,7 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     deinit {
         sharedImageProcessingContext.runOperationSynchronously{
             self.stopCapture()
-            //Fix crash when hitting catch block in init block
             self.videoOutput?.setSampleBufferDelegate(nil, queue:nil)
-            
             self.audioOutput?.setSampleBufferDelegate(nil, queue:nil)
         }
     }
