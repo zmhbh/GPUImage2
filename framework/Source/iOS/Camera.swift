@@ -175,8 +175,16 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     }
     
     deinit {
+        let captureSession = self.captureSession
+        DispatchQueue.global().async {
+            if (captureSession.isRunning) {
+                // Don't call this on the sharedImageProcessingContext otherwise you may get a deadlock
+                // since this waits for the captureOutput() delegate call to finish.
+                captureSession.stopRunning()
+            }
+        }
+        
         sharedImageProcessingContext.runOperationSynchronously{
-            self.stopCapture()
             self.videoOutput?.setSampleBufferDelegate(nil, queue:nil)
             self.audioOutput?.setSampleBufferDelegate(nil, queue:nil)
         }

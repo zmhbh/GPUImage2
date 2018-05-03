@@ -143,10 +143,23 @@ public class RenderView:UIView, ImageConsumer {
     }
     
     public func newFramebufferAvailable(_ framebuffer:Framebuffer, fromSourceIndex:UInt) {
+        let cleanup: () -> Void = {
+            if(self.delegate?.shouldDisplayNextFramebufferAfterMainThreadLoop() ?? false) {
+                DispatchQueue.main.async {
+                    self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+                    framebuffer.unlock()
+                }
+            }
+            else {
+                self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
+                framebuffer.unlock()
+            }
+        }
+        
         let work: () -> Void = {
             if (self.displayFramebuffer == nil && !self.createDisplayFramebuffer()) {
+                cleanup()
                 // Bail if we couldn't successfully create the displayFramebuffer
-                framebuffer.unlock()
                 return
             }
             self.activateDisplayFramebuffer()
@@ -160,16 +173,7 @@ public class RenderView:UIView, ImageConsumer {
             
             sharedImageProcessingContext.presentBufferForDisplay()
             
-            if(self.delegate?.shouldDisplayNextFramebufferAfterMainThreadLoop() ?? false) {
-                DispatchQueue.main.async {
-                    self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
-                    framebuffer.unlock()
-                }
-            }
-            else {
-                self.delegate?.didDisplayFramebuffer(renderView: self, framebuffer: framebuffer)
-                framebuffer.unlock()
-            }
+            cleanup()
         }
         
         if(self.delegate?.shouldDisplayNextFramebufferAfterMainThreadLoop() ?? false) {
