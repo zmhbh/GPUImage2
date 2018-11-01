@@ -114,7 +114,7 @@ class ViewController: UIViewController {
             }
         }
         
-        movieOutput.startRecording(transform: nil) { started, error in
+        movieOutput.startRecording { started, error in
             if(!started) {
                 print("ERROR: MovieOutput unable to start writing with error: \(String(describing: error))")
                 return
