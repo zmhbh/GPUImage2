@@ -263,7 +263,7 @@ let audioEncodingSettings:[String:Any] = [
 ]
 
 do {
-    movieOutput = try MovieOutput(URL: exportedURL, size:Size(width:Float(videoTrack.naturalSize.width), height:Float(videoTrack.naturalSize.height)), fileType:.mp4, liveVideo:false, videoSettings:videoEncodingSettings, videoNaturalTimeScale:videoTrack.naturalTimeScale, audioSettings:audioEncodingSettings, audioSourceFormatHint:audioSourceFormatHint)
+    movieOutput = try MovieOutput(URL: exportedURL, size:Size(width:Float(videoTrack.naturalSize.width), height:Float(videoTrack.naturalSize.height)), fileType:.mp4, liveVideo:false, videoSettings:videoEncodingSettings, videoNaturalTimeScale:videoTrack.naturalTimeScale, audioSettings:audioEncodingSettings)
 }
 catch {
     print("ERROR: Unable to setup MovieOutput with error: \(error)")
