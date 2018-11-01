@@ -64,7 +64,8 @@ public class RenderView:UIView, ImageConsumer {
         
         let eaglLayer = self.layer as! CAEAGLLayer
         eaglLayer.isOpaque = true
-        eaglLayer.drawableProperties = [kEAGLDrawablePropertyRetainedBacking: NSNumber(value:false), kEAGLDrawablePropertyColorFormat: kEAGLColorFormatRGBA8]
+        
+        eaglLayer.drawableProperties = [kEAGLDrawablePropertyRetainedBacking: false, kEAGLDrawablePropertyColorFormat: kEAGLColorFormatRGBA8]
         eaglLayer.contentsGravity = kCAGravityResizeAspectFill // Just for safety to prevent distortion
         
         self.internalLayer = eaglLayer
