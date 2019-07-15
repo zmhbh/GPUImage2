@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4E0CF1B622CB2A110079231B /* FlutterTextureOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */; };
+		4E0CF1B722CB2A110079231B /* FlutterTextureOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */; };
 		BC09239E1C92658200A2ADFA /* ShaderProgram_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */; };
 		BC0923A11C92661D00A2ADFA /* Pipeline_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */; };
 		BC0923A21C92664900A2ADFA /* Framebuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB279EB1C8D11630013E213 /* Framebuffer.swift */; };
@@ -368,6 +370,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = FlutterTextureOutput.swift; path = Source/Apple/FlutterTextureOutput.swift; sourceTree = "<group>"; };
 		BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ShaderProgram_Tests.swift; path = Tests/ShaderProgram_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Pipeline_Tests.swift; path = Tests/Pipeline_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC1E12F41C9F2FD7008F844F /* ThreeInput.vsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; name = ThreeInput.vsh; path = Source/Operations/Shaders/ThreeInput.vsh; sourceTree = "<group>"; };
@@ -1129,6 +1132,7 @@
 		BCD1B1451C66A89D001F2BDC /* Outputs */ = {
 			isa = PBXGroup;
 			children = (
+				4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */,
 				BC38D52C22AEE103000AE4F9 /* PictureOutput.swift */,
 				BC38D52B22AEE103000AE4F9 /* MovieOutput.swift */,
 				BC4EE16E1CB3554200AD8A65 /* RawDataOutput.swift */,
@@ -1457,6 +1461,7 @@
 				BCA4E2301CC31276007B51BA /* Solarize.swift in Sources */,
 				BC7FD19F1CB20B1300037949 /* LineGenerator.swift in Sources */,
 				BC7FD1421CB0B47300037949 /* MonochromeFilter.swift in Sources */,
+				4E0CF1B622CB2A110079231B /* FlutterTextureOutput.swift in Sources */,
 				BCFF46C61CB968DE00A0C521 /* ImageBuffer.swift in Sources */,
 				BC7FD0F31CB0612700037949 /* AddBlend.swift in Sources */,
 				BC7FD1931CB1D38500037949 /* Size.swift in Sources */,
@@ -1639,6 +1644,7 @@
 				BC9E35CA1E5257F100B8604F /* LightenBlend.swift in Sources */,
 				BC9E356B1E5256C500B8604F /* ColorInversion.swift in Sources */,
 				BC9E35621E5256A500B8604F /* OperationGroup.swift in Sources */,
+				4E0CF1B722CB2A110079231B /* FlutterTextureOutput.swift in Sources */,
 				BC9E35381E524D7E00B8604F /* OpenGLRendering.swift in Sources */,
 				BC9E35B41E5257A900B8604F /* ToonFilter.swift in Sources */,
 				BC9E354F1E52508A00B8604F /* RawDataInput.swift in Sources */,
