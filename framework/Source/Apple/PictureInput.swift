@@ -10,18 +10,40 @@ import UIKit
 import Cocoa
 #endif
 
+public enum PictureInputError: Error, CustomStringConvertible {
+    case zeroSizedImageError
+    case dataProviderNilError
+    case noSuchImageError(imageName: String)
+    
+    public var errorDescription: String {
+        switch self {
+        case .zeroSizedImageError:
+            return "Tried to pass in a zero-sized image"
+        case .dataProviderNilError:
+            return "Unable to retrieve image dataProvider"
+        case .noSuchImageError(let imageName):
+            return "No such image named: \(imageName) in your application bundle"
+        }
+    }
+    
+    public var description: String {
+        return "<\(type(of: self)): errorDescription = \(self.errorDescription)>"
+    }
+}
+
 public class PictureInput: ImageSource {
     public let targets = TargetContainer()
-    var imageFramebuffer:Framebuffer!
+    var imageFramebuffer:Framebuffer?
+    public var framebufferUserInfo:[AnyHashable:Any]?
     var hasProcessedImage:Bool = false
 
-    public init(image:CGImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
+    public init(image:CGImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
         // TODO: Dispatch this whole thing asynchronously to move image loading off main thread
         let widthOfImage = GLint(image.width)
         let heightOfImage = GLint(image.height)
         
         // If passed an empty image reference, CGContextDrawImage will fail in future versions of the SDK.
-        guard((widthOfImage > 0) && (heightOfImage > 0)) else { fatalError("Tried to pass in a zero-sized image") }
+        guard((widthOfImage > 0) && (heightOfImage > 0)) else { throw PictureInputError.zeroSizedImageError }
 
         var widthToUseForTexture = widthOfImage
         var heightToUseForTexture = heightOfImage
@@ -82,36 +104,30 @@ public class PictureInput: ImageSource {
             }
         }
         
-        //    CFAbsoluteTime elapsedTime, startTime = CFAbsoluteTimeGetCurrent();
-        
-        if (shouldRedrawUsingCoreGraphics) {
-            // For resized or incompatible image: redraw
-            imageData = UnsafeMutablePointer<GLubyte>.allocate(capacity:Int(widthToUseForTexture * heightToUseForTexture) * 4)
-
-            let genericRGBColorspace = CGColorSpaceCreateDeviceRGB()
+        try sharedImageProcessingContext.runOperationSynchronously{
+            //    CFAbsoluteTime elapsedTime, startTime = CFAbsoluteTimeGetCurrent();
             
-            let imageContext = CGContext(data:imageData, width:Int(widthToUseForTexture), height:Int(heightToUseForTexture), bitsPerComponent:8, bytesPerRow:Int(widthToUseForTexture) * 4, space:genericRGBColorspace,  bitmapInfo:CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
-            //        CGContextSetBlendMode(imageContext, kCGBlendModeCopy); // From Technical Q&A QA1708: http://developer.apple.com/library/ios/#qa/qa1708/_index.html
-            imageContext?.draw(image, in:CGRect(x:0.0, y:0.0, width:CGFloat(widthToUseForTexture), height:CGFloat(heightToUseForTexture)))
-        } else {
-            // Access the raw image bytes directly
-            dataFromImageDataProvider = image.dataProvider?.data
-#if os(iOS)
-            imageData = UnsafeMutablePointer<GLubyte>(mutating:CFDataGetBytePtr(dataFromImageDataProvider))
-#else
-            imageData = UnsafeMutablePointer<GLubyte>(mutating:CFDataGetBytePtr(dataFromImageDataProvider)!)
-#endif
-        }
-        
-        sharedImageProcessingContext.runOperationSynchronously{
-            do {
-                // TODO: Alter orientation based on metadata from photo
-                self.imageFramebuffer = try Framebuffer(context:sharedImageProcessingContext, orientation:orientation, size:GLSize(width:widthToUseForTexture, height:heightToUseForTexture), textureOnly:true)
-            } catch {
-                fatalError("ERROR: Unable to initialize framebuffer of size (\(widthToUseForTexture), \(heightToUseForTexture)) with error: \(error)")
+            if (shouldRedrawUsingCoreGraphics) {
+                // For resized or incompatible image: redraw
+                imageData = UnsafeMutablePointer<GLubyte>.allocate(capacity:Int(widthToUseForTexture * heightToUseForTexture) * 4)
+                
+                let genericRGBColorspace = CGColorSpaceCreateDeviceRGB()
+                
+                let imageContext = CGContext(data: imageData, width: Int(widthToUseForTexture), height: Int(heightToUseForTexture), bitsPerComponent: 8, bytesPerRow: Int(widthToUseForTexture) * 4, space: genericRGBColorspace,  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+                //        CGContextSetBlendMode(imageContext, kCGBlendModeCopy); // From Technical Q&A QA1708: http://developer.apple.com/library/ios/#qa/qa1708/_index.html
+                imageContext?.draw(image, in:CGRect(x:0.0, y:0.0, width:CGFloat(widthToUseForTexture), height:CGFloat(heightToUseForTexture)))
+            } else {
+                // Access the raw image bytes directly
+                guard let data = image.dataProvider?.data else { throw PictureInputError.dataProviderNilError }
+                dataFromImageDataProvider = data
+                imageData = UnsafeMutablePointer<GLubyte>(mutating:CFDataGetBytePtr(dataFromImageDataProvider))
             }
             
-            glBindTexture(GLenum(GL_TEXTURE_2D), self.imageFramebuffer.texture)
+            // TODO: Alter orientation based on metadata from photo
+            self.imageFramebuffer = try Framebuffer(context:sharedImageProcessingContext, orientation:orientation, size:GLSize(width:widthToUseForTexture, height:heightToUseForTexture), textureOnly:true)
+            self.imageFramebuffer!.lock()
+            
+            glBindTexture(GLenum(GL_TEXTURE_2D), self.imageFramebuffer!.texture)
             if (smoothlyScaleOutput) {
                 glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_LINEAR_MIPMAP_LINEAR)
             }
@@ -130,45 +146,61 @@ public class PictureInput: ImageSource {
     }
 
 #if canImport(UIKit)
-    public convenience init(image:UIImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
-        self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
+    public convenience init(image:UIImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
+        try self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
     }
 #else
-    public convenience init(image:NSImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
-        self.init(image:image.cgImage(forProposedRect:nil, context:nil, hints:nil)!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
+    public convenience init(image:NSImage, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
+        try self.init(image:image.cgImage(forProposedRect:nil, context:nil, hints:nil)!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
     }
 #endif
 
-    public convenience init(imageName:String, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) {
+    public convenience init(imageName:String, smoothlyScaleOutput:Bool = false, orientation:ImageOrientation = .portrait) throws {
 #if canImport(UIKit)
-        guard let image = UIImage(named:imageName) else { fatalError("No such image named: \(imageName) in your application bundle") }
-        self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
+        guard let image = UIImage(named:imageName) else { throw PictureInputError.noSuchImageError(imageName: imageName) }
+        try self.init(image:image.cgImage!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
 #else
         guard let image = NSImage(named:NSImage.Name(imageName)) else { fatalError("No such image named: \(imageName) in your application bundle") }
         self.init(image:image.cgImage(forProposedRect:nil, context:nil, hints:nil)!, smoothlyScaleOutput:smoothlyScaleOutput, orientation:orientation)
 #endif
     }
+    
+    deinit {
+        //debugPrint("Deallocating operation: \(self)")
+        
+        self.imageFramebuffer?.unlock()
+    }
+
 
     public func processImage(synchronously:Bool = false) {
+        self.imageFramebuffer?.userInfo = self.framebufferUserInfo
+        
         if synchronously {
             sharedImageProcessingContext.runOperationSynchronously{
-                sharedImageProcessingContext.makeCurrentContext()
-                self.updateTargetsWithFramebuffer(self.imageFramebuffer)
-                self.hasProcessedImage = true
+                if let framebuffer = self.imageFramebuffer {
+                    sharedImageProcessingContext.makeCurrentContext()
+                    self.updateTargetsWithFramebuffer(framebuffer)
+                    self.hasProcessedImage = true
+                }
             }
         } else {
             sharedImageProcessingContext.runOperationAsynchronously{
-                sharedImageProcessingContext.makeCurrentContext()
-                self.updateTargetsWithFramebuffer(self.imageFramebuffer)
-                self.hasProcessedImage = true
+                if let framebuffer = self.imageFramebuffer {
+                    sharedImageProcessingContext.makeCurrentContext()
+                    self.updateTargetsWithFramebuffer(framebuffer)
+                    self.hasProcessedImage = true
+                }
             }
         }
     }
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
-        if hasProcessedImage {
+        // This gets called after the pipline gets adjusted and needs an image it
+        // Disabled so we can adjust/prepare the pipline freely without worrying an old framebuffer will get pushed through it
+        // If after changing the pipline you need the prior frame buffer to be reprocessed, call processImage() again.
+        /*if hasProcessedImage {
             imageFramebuffer.lock()
             target.newFramebufferAvailable(imageFramebuffer, fromSourceIndex:atIndex)
-        }
+        }*/
     }
 }

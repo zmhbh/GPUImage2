@@ -13,9 +13,10 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         
         do {
-            camera = try Camera(sessionPreset:.vga640x480)
+            camera = try Camera(sessionPreset:.hd1280x720)
             camera.runBenchmark = true
             filter = SaturationAdjustment()
+            filter.saturation = 0.3
             camera --> filter --> renderView
             camera.startCapture()
         } catch {

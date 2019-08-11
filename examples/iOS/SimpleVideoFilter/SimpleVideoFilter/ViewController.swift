@@ -7,7 +7,7 @@ class ViewController: UIViewController {
     @IBOutlet weak var renderView: RenderView!
     @IBOutlet weak var faceDetectSwitch: UISwitch!
 
-    let fbSize = Size(width: 640, height: 480)
+    let fbSize = Size(width: 1280, height: 720)
     let faceDetector = CIDetector(ofType: CIDetectorTypeFace, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyLow])
     var shouldDetectFaces = true
     lazy var lineGenerator: LineGenerator = {
@@ -23,9 +23,10 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         
         do {
-            camera = try Camera(sessionPreset:.vga640x480)
+            camera = try Camera(sessionPreset:.hd1280x720)
             camera.runBenchmark = true
             camera.delegate = self
+            saturationFilter.saturation = 0.1
             camera --> saturationFilter --> blendFilter --> renderView
             lineGenerator --> blendFilter
             shouldDetectFaces = faceDetectSwitch.isOn

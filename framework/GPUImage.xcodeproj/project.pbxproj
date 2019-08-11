@@ -9,6 +9,17 @@
 /* Begin PBXBuildFile section */
 		4E0CF1B622CB2A110079231B /* FlutterTextureOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */; };
 		4E0CF1B722CB2A110079231B /* FlutterTextureOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */; };
+		4EAD53AD22FF998B00E31B91 /* SpeakerOutout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EAD53AC22FF998B00E31B91 /* SpeakerOutout.swift */; };
+		4EAD53B422FF9C0F00E31B91 /* NSObject+Exception.h in Headers */ = {isa = PBXBuildFile; fileRef = 4EAD53B322FF9C0F00E31B91 /* NSObject+Exception.h */; };
+		4EAD53B522FF9C0F00E31B91 /* NSObject+Exception.h in Headers */ = {isa = PBXBuildFile; fileRef = 4EAD53B322FF9C0F00E31B91 /* NSObject+Exception.h */; };
+		4EAD53B722FF9C5400E31B91 /* NSObject+Exception.m in Sources */ = {isa = PBXBuildFile; fileRef = 4EAD53B622FF9C5400E31B91 /* NSObject+Exception.m */; };
+		4EAD53B822FF9C5400E31B91 /* NSObject+Exception.m in Sources */ = {isa = PBXBuildFile; fileRef = 4EAD53B622FF9C5400E31B91 /* NSObject+Exception.m */; };
+		4EAD53BA22FF9C9C00E31B91 /* TPCircularBuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 4EAD53B922FF9C9C00E31B91 /* TPCircularBuffer.h */; };
+		4EAD53BB22FF9C9C00E31B91 /* TPCircularBuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 4EAD53B922FF9C9C00E31B91 /* TPCircularBuffer.h */; };
+		4EAD53BD22FF9CDF00E31B91 /* TPCircularBuffer.m in Sources */ = {isa = PBXBuildFile; fileRef = 4EAD53BC22FF9CDF00E31B91 /* TPCircularBuffer.m */; };
+		4EAD53BE22FF9CDF00E31B91 /* TPCircularBuffer.m in Sources */ = {isa = PBXBuildFile; fileRef = 4EAD53BC22FF9CDF00E31B91 /* TPCircularBuffer.m */; };
+		4EAD53C022FF9D8600E31B91 /* GPUImage-Bridging-Header.h in Headers */ = {isa = PBXBuildFile; fileRef = 4EAD53BF22FF9D8600E31B91 /* GPUImage-Bridging-Header.h */; };
+		4EAD53C122FF9D8600E31B91 /* GPUImage-Bridging-Header.h in Headers */ = {isa = PBXBuildFile; fileRef = 4EAD53BF22FF9D8600E31B91 /* GPUImage-Bridging-Header.h */; };
 		BC09239E1C92658200A2ADFA /* ShaderProgram_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */; };
 		BC0923A11C92661D00A2ADFA /* Pipeline_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */; };
 		BC0923A21C92664900A2ADFA /* Framebuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB279EB1C8D11630013E213 /* Framebuffer.swift */; };
@@ -371,6 +382,12 @@
 
 /* Begin PBXFileReference section */
 		4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = FlutterTextureOutput.swift; path = Source/Apple/FlutterTextureOutput.swift; sourceTree = "<group>"; };
+		4EAD53AC22FF998B00E31B91 /* SpeakerOutout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpeakerOutout.swift; path = Source/Apple/SpeakerOutout.swift; sourceTree = "<group>"; };
+		4EAD53B322FF9C0F00E31B91 /* NSObject+Exception.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "NSObject+Exception.h"; path = "Source/NSObject+Exception.h"; sourceTree = "<group>"; };
+		4EAD53B622FF9C5400E31B91 /* NSObject+Exception.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "NSObject+Exception.m"; path = "Source/NSObject+Exception.m"; sourceTree = "<group>"; };
+		4EAD53B922FF9C9C00E31B91 /* TPCircularBuffer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = TPCircularBuffer.h; path = Source/TPCircularBuffer.h; sourceTree = "<group>"; };
+		4EAD53BC22FF9CDF00E31B91 /* TPCircularBuffer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = TPCircularBuffer.m; path = Source/TPCircularBuffer.m; sourceTree = "<group>"; };
+		4EAD53BF22FF9D8600E31B91 /* GPUImage-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "GPUImage-Bridging-Header.h"; path = "Source/GPUImage-Bridging-Header.h"; sourceTree = "<group>"; };
 		BC09239D1C92658200A2ADFA /* ShaderProgram_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ShaderProgram_Tests.swift; path = Tests/ShaderProgram_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC09239F1C9265A600A2ADFA /* Pipeline_Tests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Pipeline_Tests.swift; path = Tests/Pipeline_Tests.swift; sourceTree = SOURCE_ROOT; };
 		BC1E12F41C9F2FD7008F844F /* ThreeInput.vsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; name = ThreeInput.vsh; path = Source/Operations/Shaders/ThreeInput.vsh; sourceTree = "<group>"; };
@@ -975,6 +992,11 @@
 		BC6E7CC51C39AD7B006DF678 /* Base */ = {
 			isa = PBXGroup;
 			children = (
+				4EAD53BF22FF9D8600E31B91 /* GPUImage-Bridging-Header.h */,
+				4EAD53B922FF9C9C00E31B91 /* TPCircularBuffer.h */,
+				4EAD53BC22FF9CDF00E31B91 /* TPCircularBuffer.m */,
+				4EAD53B322FF9C0F00E31B91 /* NSObject+Exception.h */,
+				4EAD53B622FF9C5400E31B91 /* NSObject+Exception.m */,
 				BCD1B14B1C66B225001F2BDC /* Pipeline.swift */,
 				BC6E7CC61C39AD9E006DF678 /* ShaderProgram.swift */,
 				BC7FD0FA1CB0663C00037949 /* ShaderUniformSettings.swift */,
@@ -1132,6 +1154,7 @@
 		BCD1B1451C66A89D001F2BDC /* Outputs */ = {
 			isa = PBXGroup;
 			children = (
+				4EAD53AC22FF998B00E31B91 /* SpeakerOutout.swift */,
 				4E0CF1B522CB2A100079231B /* FlutterTextureOutput.swift */,
 				BC38D52C22AEE103000AE4F9 /* PictureOutput.swift */,
 				BC38D52B22AEE103000AE4F9 /* MovieOutput.swift */,
@@ -1174,6 +1197,9 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4EAD53B422FF9C0F00E31B91 /* NSObject+Exception.h in Headers */,
+				4EAD53C022FF9D8600E31B91 /* GPUImage-Bridging-Header.h in Headers */,
+				4EAD53BA22FF9C9C00E31B91 /* TPCircularBuffer.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1181,6 +1207,9 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4EAD53B522FF9C0F00E31B91 /* NSObject+Exception.h in Headers */,
+				4EAD53C122FF9D8600E31B91 /* GPUImage-Bridging-Header.h in Headers */,
+				4EAD53BB22FF9C9C00E31B91 /* TPCircularBuffer.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1406,6 +1435,7 @@
 				BC7FD1791CB1C97700037949 /* PolarPixellate.swift in Sources */,
 				BC4EE1621CB348CB00AD8A65 /* ThresholdSketch.swift in Sources */,
 				BC7FD09E1CA6301B00037949 /* GammaAdjustment.swift in Sources */,
+				4EAD53BD22FF9CDF00E31B91 /* TPCircularBuffer.m in Sources */,
 				BCE111A91CBC9960005293A4 /* AverageLuminanceThreshold.swift in Sources */,
 				BCFF46C41CB9565F00A0C521 /* MotionBlur.swift in Sources */,
 				BC7FD0FB1CB0663C00037949 /* ShaderUniformSettings.swift in Sources */,
@@ -1423,6 +1453,7 @@
 				BC7FD1611CB0CDDF00037949 /* SepiaToneFilter.swift in Sources */,
 				BCFF46C01CB9556B00A0C521 /* WhiteBalance.swift in Sources */,
 				BC7FD14E1CB0BD3900037949 /* ZoomBlur.swift in Sources */,
+				4EAD53B722FF9C5400E31B91 /* NSObject+Exception.m in Sources */,
 				BCFB07921CBF37A1009B2333 /* TextureInput.swift in Sources */,
 				BC38D52F22AEE103000AE4F9 /* PictureOutput.swift in Sources */,
 				BC6E7CC71C39AD9E006DF678 /* ShaderProgram.swift in Sources */,
@@ -1570,6 +1601,7 @@
 				BC9E35A61E52577B00B8604F /* SwirlDistortion.swift in Sources */,
 				BC9E35341E524D7900B8604F /* Framebuffer.swift in Sources */,
 				BC9E35B31E5257A600B8604F /* EmbossFilter.swift in Sources */,
+				4EAD53BE22FF9CDF00E31B91 /* TPCircularBuffer.m in Sources */,
 				BC9E352E1E524D6F00B8604F /* ShaderUniformSettings.swift in Sources */,
 				BC9E35A21E52577000B8604F /* CGAColorspaceFilter.swift in Sources */,
 				BC9E35C31E5257D900B8604F /* ColorDodgeBlend.swift in Sources */,
@@ -1608,6 +1640,7 @@
 				BC9E35781E5256EB00B8604F /* ColorMatrixFilter.swift in Sources */,
 				BC38D53022AEE103000AE4F9 /* PictureOutput.swift in Sources */,
 				BC9E35D11E52580400B8604F /* ScreenBlend.swift in Sources */,
+				4EAD53B822FF9C5400E31B91 /* NSObject+Exception.m in Sources */,
 				BC9E356A1E5256C200B8604F /* Haze.swift in Sources */,
 				BC9E35D31E52580A00B8604F /* SourceOverBlend.swift in Sources */,
 				BC9E357E1E5256FE00B8604F /* Vibrance.swift in Sources */,
@@ -1663,6 +1696,7 @@
 				BC9E359B1E52575800B8604F /* NobleCornerDetector.swift in Sources */,
 				BC9E35A91E52578600B8604F /* ZoomBlur.swift in Sources */,
 				BC9E352A1E524D6900B8604F /* Pipeline.swift in Sources */,
+				4EAD53AD22FF998B00E31B91 /* SpeakerOutout.swift in Sources */,
 				BC9E35571E5252B700B8604F /* LineGenerator.swift in Sources */,
 				BC9E358B1E52572900B8604F /* HistogramEqualization.swift in Sources */,
 				BC9E35751E5256E100B8604F /* AmatorkaFilter.swift in Sources */,
@@ -1775,6 +1809,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/GPUImage-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -1828,6 +1863,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.9;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/GPUImage-Bridging-Header.h";
 				SWIFT_VERSION = 4.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -1851,6 +1887,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetlakesoftware.GPUImage;
 				PRODUCT_NAME = GPUImage;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/GPUImage-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -1872,6 +1909,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetlakesoftware.GPUImage;
 				PRODUCT_NAME = GPUImage;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/GPUImage-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 			};
 			name = Release;

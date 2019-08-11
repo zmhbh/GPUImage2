@@ -2,12 +2,12 @@ import Foundation
 
 public func defaultVertexShaderForInputs(_ inputCount:UInt) -> String {
     switch inputCount {
-        case 1: return OneInputVertexShader
-        case 2: return TwoInputVertexShader
-        case 3: return ThreeInputVertexShader
-        case 4: return FourInputVertexShader
-        case 5: return FiveInputVertexShader
-        default: return OneInputVertexShader
+    case 1: return OneInputVertexShader
+    case 2: return TwoInputVertexShader
+    case 3: return ThreeInputVertexShader
+    case 4: return FourInputVertexShader
+    case 5: return FiveInputVertexShader
+    default: return OneInputVertexShader
     }
 }
 
@@ -42,7 +42,7 @@ open class BasicOperation: ImageProcessingOperation {
     public let targets = TargetContainer()
     public let sources = SourceContainer()
     var shader:ShaderProgram
-    var inputFramebuffers = [UInt:Framebuffer]()
+    public var inputFramebuffers = [UInt:Framebuffer]()
     var renderFramebuffer:Framebuffer!
     var outputFramebuffer:Framebuffer { get { return renderFramebuffer } }
     let usesAspectRatio:Bool
@@ -103,7 +103,7 @@ open class BasicOperation: ImageProcessingOperation {
         }
     }
     
-    func renderFrame() {
+    open func renderFrame() {
         renderFramebuffer = sharedImageProcessingContext.framebufferCache.requestFramebufferWithProperties(orientation:.portrait, size:sizeOfInitialStageBasedOnFramebuffer(inputFramebuffers[0]!), stencil:mask != nil)
         
         let textureProperties = initialTextureProperties()
@@ -148,6 +148,9 @@ open class BasicOperation: ImageProcessingOperation {
                 remainingFramebuffers[key] = framebuffer
             }
         }
+        
+        renderFramebuffer.userInfo = inputFramebuffers[0]!.userInfo
+        
         inputFramebuffers = remainingFramebuffers
     }
     
@@ -175,7 +178,7 @@ open class BasicOperation: ImageProcessingOperation {
         return inputTextureProperties
     }
     
-    func configureFramebufferSpecificUniforms(_ inputFramebuffer:Framebuffer) {
+    open func configureFramebufferSpecificUniforms(_ inputFramebuffer:Framebuffer) {
         if usesAspectRatio {
             let outputRotation = overriddenOutputRotation ?? inputFramebuffer.orientation.rotationNeededForOrientation(.portrait)
             uniformSettings["aspectRatio"] = inputFramebuffer.aspectRatioForRotation(outputRotation)
@@ -183,11 +186,11 @@ open class BasicOperation: ImageProcessingOperation {
     }
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
-        sharedImageProcessingContext.runOperationAsynchronously{
-            guard let renderFramebuffer = self.renderFramebuffer, (!renderFramebuffer.timingStyle.isTransient()) else { return }
-            
-            renderFramebuffer.lock()
-            target.newFramebufferAvailable(renderFramebuffer, fromSourceIndex:atIndex)
-        }
+//        sharedImageProcessingContext.runOperationAsynchronously{
+//            guard let renderFramebuffer = self.renderFramebuffer, (!renderFramebuffer.timingStyle.isTransient()) else { return }
+//
+//            renderFramebuffer.lock()
+//            target.newFramebufferAvailable(renderFramebuffer, fromSourceIndex:atIndex)
+//        }
     }
 }
