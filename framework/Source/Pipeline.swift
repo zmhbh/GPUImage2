@@ -113,80 +113,40 @@ public class TargetContainer:Sequence {
     
     private var count:Int { get { return targets.count } }
 
-#if !os(Linux)
-    let dispatchQueue = DispatchQueue(label:"com.sunsetlakesoftware.GPUImage.targetContainerQueue", attributes: [])
-#endif
-
     public init() {
     }
     
     public func append(_ target:ImageConsumer, indexAtTarget:UInt) {
         // TODO: Don't allow the addition of a target more than once
-#if os(Linux)
-            self.targets.append(WeakImageConsumer(value:target, indexAtTarget:indexAtTarget))
-#else
-        dispatchQueue.async{
-            self.targets.append(WeakImageConsumer(value:target, indexAtTarget:indexAtTarget))
-        }
-#endif
+        self.targets.append(WeakImageConsumer(value:target, indexAtTarget:indexAtTarget))
     }
     
     public func makeIterator() -> AnyIterator<(ImageConsumer, UInt)> {
         var index = 0
         
         return AnyIterator { () -> (ImageConsumer, UInt)? in
-#if os(Linux)
+            if (index >= self.targets.count) {
+                return nil
+            }
+            
+            while (self.targets[index].value == nil) {
+                self.targets.remove(at:index)
                 if (index >= self.targets.count) {
                     return nil
                 }
-                
-                while (self.targets[index].value == nil) {
-                    self.targets.remove(at:index)
-                    if (index >= self.targets.count) {
-                        return nil
-                    }
-                }
-                
-                index += 1
-                return (self.targets[index - 1].value!, self.targets[index - 1].indexAtTarget)
-#else
-            return self.dispatchQueue.sync{
-                if (index >= self.targets.count) {
-                    return nil
-                }
-                
-                while (self.targets[index].value == nil) {
-                    self.targets.remove(at:index)
-                    if (index >= self.targets.count) {
-                        return nil
-                    }
-                }
-                
-                index += 1
-                return (self.targets[index - 1].value!, self.targets[index - 1].indexAtTarget)
-           }
-#endif
+            }
+            
+            index += 1
+            return (self.targets[index - 1].value!, self.targets[index - 1].indexAtTarget)
         }
     }
     
     public func removeAll() {
-#if os(Linux)
-            self.targets.removeAll()
-#else
-        dispatchQueue.async{
-            self.targets.removeAll()
-        }
-#endif
+        self.targets.removeAll()
     }
     
     public func remove(_ target:ImageConsumer) {
-        #if os(Linux)
-            self.targets = self.targets.filter { $0.value !== target }
-        #else
-            dispatchQueue.async{
-                self.targets = self.targets.filter { $0.value !== target }
-            }
-        #endif
+        self.targets = self.targets.filter { $0.value !== target }
     }
 }
 
