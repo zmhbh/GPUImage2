@@ -32,39 +32,45 @@ infix operator --> : AdditionPrecedence
 
 public extension ImageSource {
     public func addTarget(_ target:ImageConsumer, atTargetIndex:UInt? = nil) {
-        if let targetIndex = atTargetIndex {
-            target.setSource(self, atIndex:targetIndex)
-            targets.append(target, indexAtTarget:targetIndex)
-            sharedImageProcessingContext.runOperationAsynchronously {
+        sharedImageProcessingContext.runOperationAsynchronously {
+            if let targetIndex = atTargetIndex {
+                target.setSource(self, atIndex:targetIndex)
+                self.targets.append(target, indexAtTarget:targetIndex)
                 self.transmitPreviousImage(to:target, atIndex:targetIndex)
-            }
-        } else if let indexAtTarget = target.addSource(self) {
-            targets.append(target, indexAtTarget:indexAtTarget)
-            sharedImageProcessingContext.runOperationAsynchronously {
+            } else if let indexAtTarget = target.addSource(self) {
+                self.targets.append(target, indexAtTarget:indexAtTarget)
                 self.transmitPreviousImage(to:target, atIndex:indexAtTarget)
+            } else {
+                debugPrint("Warning: tried to add target beyond target's input capacity")
             }
-        } else {
-            debugPrint("Warning: tried to add target beyond target's input capacity")
         }
     }
 
     public func removeAllTargets() {
-        for (target, index) in targets {
-            target.removeSourceAtIndex(index)
+        sharedImageProcessingContext.runOperationAsynchronously {
+            for (target, index) in self.targets {
+                target.removeSourceAtIndex(index)
+            }
+            self.targets.removeAll()
         }
-        targets.removeAll()
     }
     
     public func remove(_ target:ImageConsumer) {
-        for (testTarget, index) in targets {
-            if(target === testTarget) {
-                target.removeSourceAtIndex(index)
-                targets.remove(target)
+        sharedImageProcessingContext.runOperationAsynchronously {
+            for (testTarget, index) in self.targets {
+                if(target === testTarget) {
+                    target.removeSourceAtIndex(index)
+                    self.targets.remove(target)
+                }
             }
         }
     }
     
     public func updateTargetsWithFramebuffer(_ framebuffer:Framebuffer) {
+        if (DispatchQueue.getSpecific(key:sharedImageProcessingContext.dispatchQueueKey) != sharedImageProcessingContext.dispatchQueueKeyValue) {
+            print("WARNING: updateTargetsWithFramebuffer() must be called from the sharedImageProcessingContext")
+        }
+        
         var foundTargets = [(ImageConsumer, UInt)]()
         for target in targets {
             foundTargets.append(target)
@@ -86,16 +92,25 @@ public extension ImageSource {
 }
 
 public extension ImageConsumer {
-    public func addSource(_ source:ImageSource) -> UInt? {
+    fileprivate func addSource(_ source:ImageSource) -> UInt? {
         return sources.append(source, maximumInputs:maximumInputs)
     }
     
-    public func setSource(_ source:ImageSource, atIndex:UInt) {
+    fileprivate func setSource(_ source:ImageSource, atIndex:UInt) {
         _ = sources.insert(source, atIndex:atIndex, maximumInputs:maximumInputs)
     }
 
-    public func removeSourceAtIndex(_ index:UInt) {
+    fileprivate func removeSourceAtIndex(_ index:UInt) {
         sources.removeAtIndex(index)
+    }
+    
+    public func removeAllSources() {
+        sharedImageProcessingContext.runOperationAsynchronously {
+            for (index, source) in self.sources.sources {
+                self.removeSourceAtIndex(index)
+                source.targets.remove(self)
+            }
+        }
     }
 }
 
@@ -116,7 +131,7 @@ public class TargetContainer:Sequence {
     public init() {
     }
     
-    public func append(_ target:ImageConsumer, indexAtTarget:UInt) {
+    fileprivate func append(_ target:ImageConsumer, indexAtTarget:UInt) {
         // TODO: Don't allow the addition of a target more than once
         self.targets.append(WeakImageConsumer(value:target, indexAtTarget:indexAtTarget))
     }
@@ -141,22 +156,22 @@ public class TargetContainer:Sequence {
         }
     }
     
-    public func removeAll() {
+    fileprivate func removeAll() {
         self.targets.removeAll()
     }
     
-    public func remove(_ target:ImageConsumer) {
+    fileprivate func remove(_ target:ImageConsumer) {
         self.targets = self.targets.filter { $0.value !== target }
     }
 }
 
 public class SourceContainer {
-    public var sources:[UInt:ImageSource] = [:]
+    fileprivate var sources:[UInt:ImageSource] = [:]
     
     public init() {
     }
     
-    public func append(_ source:ImageSource, maximumInputs:UInt) -> UInt? {
+    fileprivate func append(_ source:ImageSource, maximumInputs:UInt) -> UInt? {
         var currentIndex:UInt = 0
         while currentIndex < maximumInputs {
             if (sources[currentIndex] == nil) {
@@ -169,13 +184,13 @@ public class SourceContainer {
         return nil
     }
     
-    public func insert(_ source:ImageSource, atIndex:UInt, maximumInputs:UInt) -> UInt {
+    fileprivate func insert(_ source:ImageSource, atIndex:UInt, maximumInputs:UInt) -> UInt {
         guard (atIndex < maximumInputs) else { fatalError("ERROR: Attempted to set a source beyond the maximum number of inputs on this operation") }
         sources[atIndex] = source
         return atIndex
     }
     
-    public func removeAtIndex(_ index:UInt) {
+    fileprivate func removeAtIndex(_ index:UInt) {
         sources[index] = nil
     }
 }
@@ -192,14 +207,8 @@ public class ImageRelay: ImageProcessingOperation {
     }
     
     public func transmitPreviousImage(to target:ImageConsumer, atIndex:UInt) {
-        DispatchQueue.main.async {
-            // Sources is not thread safe so we should only access it from the main thread
-            // Note: addTarget() modifies the sources from the main thread
-            if let source = self.sources.sources[0] {
-                sharedImageProcessingContext.runOperationAsynchronously {
-                    source.transmitPreviousImage(to:self, atIndex:0)
-                }
-            }
+        if let source = self.sources.sources[0] {
+            source.transmitPreviousImage(to:self, atIndex:0)
         }
     }
 

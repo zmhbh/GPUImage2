@@ -28,7 +28,7 @@ open class BasicOperation: ImageProcessingOperation {
                 mask.addTarget(maskImageRelay)
             } else {
                 maskFramebuffer?.unlock()
-                maskImageRelay.removeSourceAtIndex(0)
+                maskImageRelay.removeAllSources()
                 maskFramebuffer = nil
             }
         }
