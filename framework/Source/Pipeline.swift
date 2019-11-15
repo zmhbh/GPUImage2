@@ -31,7 +31,7 @@ infix operator --> : AdditionPrecedence
 // MARK: Extensions and supporting types
 
 public extension ImageSource {
-    public func addTarget(_ target:ImageConsumer, atTargetIndex:UInt? = nil) {
+    func addTarget(_ target:ImageConsumer, atTargetIndex:UInt? = nil) {
         sharedImageProcessingContext.runOperationAsynchronously {
             if let targetIndex = atTargetIndex {
                 target.setSource(self, atIndex:targetIndex)
@@ -46,7 +46,7 @@ public extension ImageSource {
         }
     }
 
-    public func removeAllTargets() {
+    func removeAllTargets() {
         sharedImageProcessingContext.runOperationAsynchronously {
             for (target, index) in self.targets {
                 target.removeSourceAtIndex(index)
@@ -55,7 +55,7 @@ public extension ImageSource {
         }
     }
     
-    public func remove(_ target:ImageConsumer) {
+    func remove(_ target:ImageConsumer) {
         sharedImageProcessingContext.runOperationAsynchronously {
             for (testTarget, index) in self.targets {
                 if(target === testTarget) {
@@ -66,7 +66,7 @@ public extension ImageSource {
         }
     }
     
-    public func updateTargetsWithFramebuffer(_ framebuffer:Framebuffer) {
+    func updateTargetsWithFramebuffer(_ framebuffer:Framebuffer) {
         if (DispatchQueue.getSpecific(key:sharedImageProcessingContext.dispatchQueueKey) != sharedImageProcessingContext.dispatchQueueKeyValue) {
             print("WARNING: updateTargetsWithFramebuffer() must be called from the sharedImageProcessingContext")
         }
@@ -104,7 +104,7 @@ public extension ImageConsumer {
         sources.removeAtIndex(index)
     }
     
-    public func removeAllSources() {
+    func removeAllSources() {
         sharedImageProcessingContext.runOperationAsynchronously {
             for (index, source) in self.sources.sources {
                 self.removeSourceAtIndex(index)

@@ -192,6 +192,7 @@
 				TargetAttributes = {
 					BCC49F8E1CD6E1D800B63EEB = {
 						CreatedOnToolsVersion = 7.3;
+						DevelopmentTeam = FQ7WDPMYNA;
 						LastSwiftMigration = 0940;
 					};
 				};
@@ -201,6 +202,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 				Base,
 			);
@@ -415,7 +417,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = FQ7WDPMYNA;
 				INFOPLIST_FILE = SimpleMovieFilter/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetlakesoftware.SimpleMovieFilter;
@@ -429,7 +431,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = FQ7WDPMYNA;
 				INFOPLIST_FILE = SimpleMovieFilter/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetlakesoftware.SimpleMovieFilter;
