@@ -96,7 +96,7 @@ public class SpeakerOutput: AudioEncodingTarget {
     public func activateAudioTrack() {
         if(changesAudioSession) {
             do {
-                try AVAudioSession.sharedInstance().setCategory(AVAudioSessionCategoryAmbient)
+                try AVAudioSession.sharedInstance().setCategory(.ambient)
                 try AVAudioSession.sharedInstance().setActive(true)
             }
             catch {
@@ -217,7 +217,7 @@ public class SpeakerOutput: AudioEncodingTarget {
         // Populate an AudioBufferList with the sample
         var audioBufferList = AudioBufferList()
         var blockBuffer:CMBlockBuffer?
-        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, nil, &audioBufferList, MemoryLayout<AudioBufferList>.size, nil, nil, kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, &blockBuffer)
+        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, bufferListSizeNeededOut: nil, bufferListOut: &audioBufferList, bufferListSize: MemoryLayout<AudioBufferList>.size, blockBufferAllocator: nil, blockBufferMemoryAllocator: nil, flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, blockBufferOut: &blockBuffer)
         
         // This is actually doing audioBufferList.mBuffers[0]
         // Since the struct has an array of length of 1 the compiler is interpreting
@@ -330,4 +330,3 @@ func bridgeObject(_ obj : AnyObject) -> UnsafeMutableRawPointer {
 func bridgeRawPointer(_ ptr : UnsafeMutableRawPointer) -> AnyObject {
     return Unmanaged.fromOpaque(ptr).takeUnretainedValue()
 }
-

@@ -131,7 +131,7 @@ public class TargetContainer:Sequence {
     public init() {
     }
     
-    fileprivate func append(_ target:ImageConsumer, indexAtTarget:UInt) {
+    internal func append(_ target:ImageConsumer, indexAtTarget:UInt) {
         // TODO: Don't allow the addition of a target more than once
         self.targets.append(WeakImageConsumer(value:target, indexAtTarget:indexAtTarget))
     }

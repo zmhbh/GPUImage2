@@ -159,7 +159,7 @@ public class MovieInput: ImageSource {
             
             self.startTime = self.requestedStartTime
             if let requestedStartTime = self.requestedStartTime {
-                assetReader.timeRange = CMTimeRange(start: requestedStartTime, duration: kCMTimePositiveInfinity)
+                assetReader.timeRange = CMTimeRange(start: requestedStartTime, duration: .positiveInfinity)
             }
             self.requestedStartTime = nil
             self.currentTime = nil
@@ -209,10 +209,10 @@ public class MovieInput: ImageSource {
         var readerAudioTrackOutput:AVAssetReaderOutput? = nil
         
         for output in assetReader.outputs {
-            if(output.mediaType == AVMediaType.video.rawValue) {
+            if(output.mediaType == AVMediaType.video) {
                 readerVideoTrackOutput = output
             }
-            if(output.mediaType == AVMediaType.audio.rawValue) {
+            if(output.mediaType == AVMediaType.audio) {
                 readerAudioTrackOutput = output
             }
         }
