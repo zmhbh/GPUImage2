@@ -85,8 +85,6 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     var totalFrameTimeDuringCapture:Double = 0.0
     var framesSinceLastCheck = 0
     var lastCheckTime = CFAbsoluteTimeGetCurrent()
-    
-    var captureSessionRestartAttempts = 0
 
     public init(sessionPreset:AVCaptureSession.Preset, cameraDevice:AVCaptureDevice? = nil, location:PhysicalCameraLocation = .backFacing, captureAsYUV:Bool = true) throws {
         self.location = location
@@ -172,9 +170,6 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
         super.init()
         
         videoOutput.setSampleBufferDelegate(self, queue:cameraProcessingQueue)
-        
-        NotificationCenter.default.addObserver(self, selector: #selector(Camera.captureSessionRuntimeError(note:)), name: NSNotification.Name.AVCaptureSessionRuntimeError, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(Camera.captureSessionDidStartRunning(note:)), name: NSNotification.Name.AVCaptureSessionDidStartRunning, object: nil)
     }
     
     deinit {
@@ -191,20 +186,6 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
             self.videoOutput?.setSampleBufferDelegate(nil, queue:nil)
             self.audioOutput?.setSampleBufferDelegate(nil, queue:nil)
         }
-    }
-    
-    @objc func captureSessionRuntimeError(note: NSNotification) {
-        print("ERROR: Capture session runtime error: \(String(describing: note.userInfo))")
-        if(self.captureSessionRestartAttempts < 1) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.startCapture()
-            }
-            self.captureSessionRestartAttempts += 1
-        }
-    }
-    
-    @objc func captureSessionDidStartRunning(note: NSNotification) {
-        self.captureSessionRestartAttempts = 0
     }
     
     public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
