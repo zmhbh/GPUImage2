@@ -71,21 +71,18 @@ public extension ImageSource {
             print("WARNING: updateTargetsWithFramebuffer() must be called from the sharedImageProcessingContext")
         }
         
-        var foundTargets = [(ImageConsumer, UInt)]()
-        for target in targets {
-            foundTargets.append(target)
-        }
+        let targets = self.targets.targets
         
-        if foundTargets.count == 0 { // Deal with the case where no targets are attached by immediately returning framebuffer to cache
+        if targets.count == 0 { // Deal with the case where no targets are attached by immediately returning framebuffer to cache
             framebuffer.lock()
             framebuffer.unlock()
         } else {
             // Lock first for each output, to guarantee proper ordering on multi-output operations
-            for _ in foundTargets {
+            for _ in targets {
                 framebuffer.lock()
             }
         }
-        for (target, index) in foundTargets {
+        for (target, index) in targets {
             target.newFramebufferAvailable(framebuffer, fromSourceIndex:index)
         }
     }
@@ -124,19 +121,11 @@ class WeakImageConsumer {
 }
 
 public class TargetContainer:Sequence {
-    private var targets = [WeakImageConsumer]()
-
-    public init() {
-    }
+    private var weakTargets = [WeakImageConsumer]()
     
-    internal func append(_ target:ImageConsumer, indexAtTarget:UInt) {
-        // TODO: Don't allow the addition of a target more than once
-        self.targets.append(WeakImageConsumer(value:target, indexAtTarget:indexAtTarget))
-    }
-    
-    public func makeIterator() -> AnyIterator<(ImageConsumer, UInt)> {
-        // Get the list of values that have not deallocated
-        let targets: [(ImageConsumer, UInt)] = self.targets.compactMap { weakImageConsumer in
+    fileprivate var targets: [(ImageConsumer, UInt)] {
+        // Get list of values that have not deallocated
+        let targets: [(ImageConsumer, UInt)] = self.weakTargets.compactMap { weakImageConsumer in
             if let imageConsumer = weakImageConsumer.value {
                 return (imageConsumer, weakImageConsumer.indexAtTarget)
             }
@@ -145,8 +134,22 @@ public class TargetContainer:Sequence {
             }
         }
         
-        // Remove the deallocated values
-        self.targets = self.targets.filter { $0.value != nil }
+        // Remove any deallocated values
+        self.weakTargets = self.weakTargets.filter { $0.value != nil }
+        
+        return targets
+    }
+    
+    public init() {
+    }
+    
+    internal func append(_ target:ImageConsumer, indexAtTarget:UInt) {
+        // TODO: Don't allow the addition of a target more than once
+        self.weakTargets.append(WeakImageConsumer(value:target, indexAtTarget:indexAtTarget))
+    }
+    
+    public func makeIterator() -> AnyIterator<(ImageConsumer, UInt)> {
+        let targets = self.targets
         
         var index = 0
         
@@ -161,11 +164,11 @@ public class TargetContainer:Sequence {
     }
     
     fileprivate func removeAll() {
-        self.targets.removeAll()
+        self.weakTargets.removeAll()
     }
     
     fileprivate func remove(_ target:ImageConsumer) {
-        self.targets = self.targets.filter { $0.value !== target }
+        self.weakTargets = self.weakTargets.filter { $0.value !== target }
     }
 }
 
