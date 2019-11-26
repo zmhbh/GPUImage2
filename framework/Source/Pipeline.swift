@@ -125,8 +125,6 @@ class WeakImageConsumer {
 
 public class TargetContainer:Sequence {
     private var targets = [WeakImageConsumer]()
-    
-    private var count:Int { get { return targets.count } }
 
     public init() {
     }
@@ -137,22 +135,28 @@ public class TargetContainer:Sequence {
     }
     
     public func makeIterator() -> AnyIterator<(ImageConsumer, UInt)> {
+        // Get the list of values that have not deallocated
+        let targets: [(ImageConsumer, UInt)] = self.targets.compactMap { weakImageConsumer in
+            if let imageConsumer = weakImageConsumer.value {
+                return (imageConsumer, weakImageConsumer.indexAtTarget)
+            }
+            else {
+                return nil
+            }
+        }
+        
+        // Remove the deallocated values
+        self.targets = self.targets.filter { $0.value != nil }
+        
         var index = 0
         
         return AnyIterator { () -> (ImageConsumer, UInt)? in
-            if (index >= self.targets.count) {
+            if (index >= targets.count) {
                 return nil
             }
             
-            while (self.targets[index].value == nil) {
-                self.targets.remove(at:index)
-                if (index >= self.targets.count) {
-                    return nil
-                }
-            }
-            
             index += 1
-            return (self.targets[index - 1].value!, self.targets[index - 1].indexAtTarget)
+            return targets[index - 1]
         }
     }
     
