@@ -194,7 +194,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
             guard self.isRecording,
                 self.assetWriter.status == .writing,
                 !self.videoEncodingIsFinished else {
-                    self.synchronizedEncodingDebugPrint("Guard fell through, dropping frame")
+                    self.synchronizedEncodingDebugPrint("Guard fell through, dropping frame: \(String(describing: self.assetWriter.error))")
                     return
             }
             
@@ -319,7 +319,7 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 self.assetWriter.status == .writing,
                 !self.audioEncodingIsFinished,
                 let assetWriterAudioInput = self.assetWriterAudioInput else {
-                    self.synchronizedEncodingDebugPrint("Guard fell through, dropping audio sample")
+                    self.synchronizedEncodingDebugPrint("Guard fell through, dropping audio sample: \(String(describing: self.assetWriter.error))")
                     return
             }
             
