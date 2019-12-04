@@ -36,7 +36,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     
     let assetWriterPixelBufferInput:AVAssetWriterInputPixelBufferAdaptor
     let size:Size
-    let colorSwizzlingShader:ShaderProgram
     private var isRecording = false
     var videoEncodingIsFinished = false
     var audioEncodingIsFinished = false
@@ -61,12 +60,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     public init(URL:Foundation.URL, size:Size, fileType:AVFileType = .mov, liveVideo:Bool = false, videoSettings:[String:Any]? = nil, videoNaturalTimeScale:CMTimeScale? = nil, audioSettings:[String:Any]? = nil, audioSourceFormatHint:CMFormatDescription? = nil) throws {
         imageProcessingShareGroup = sharedImageProcessingContext.context.sharegroup
         let movieProcessingContext = OpenGLContext()
-        
-        if movieProcessingContext.supportsTextureCaches() {
-            self.colorSwizzlingShader = movieProcessingContext.passthroughShader
-        } else {
-            self.colorSwizzlingShader = crashOnShaderCompileFailure("MovieOutput"){try movieProcessingContext.programForVertexShader(defaultVertexShaderForInputs(1), fragmentShader:ColorSwizzlingFragmentShader)}
-        }
         
         self.size = size
         
@@ -101,9 +94,11 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         encodingLiveVideo = liveVideo
         
         // You need to use BGRA for the video in order to get realtime encoding. I use a color-swizzling shader to line up glReadPixels' normal RGBA output with the movie input's BGRA.
-        let sourcePixelBufferAttributesDictionary:[String:Any] = [kCVPixelBufferPixelFormatTypeKey as String:Int32(kCVPixelFormatType_32BGRA),
-                                                                        kCVPixelBufferWidthKey as String:self.size.width,
-                                                                        kCVPixelBufferHeightKey as String:self.size.height]
+        let sourcePixelBufferAttributesDictionary:[String:Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String:Int32(kCVPixelFormatType_32BGRA),
+            kCVPixelBufferWidthKey as String:self.size.width,
+            kCVPixelBufferHeightKey as String:self.size.height
+        ]
         
         assetWriterPixelBufferInput = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput:assetWriterVideoInput, sourcePixelBufferAttributes:sourcePixelBufferAttributesDictionary)
         assetWriter.add(assetWriterVideoInput)
@@ -228,6 +223,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 print("WARNING: Unable to create pixel buffer, dropping frame")
                 return
             }
+
+            CVPixelBufferLockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
             
             do {
                 try self.renderIntoPixelBuffer(self.pixelBuffer!, framebuffer:framebuffer)
@@ -287,13 +284,12 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         
         renderFramebuffer.activateFramebufferForRendering()
         clearFramebufferWithColor(Color.black)
-        CVPixelBufferLockBaseAddress(pixelBuffer, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
-        renderQuadWithShader(colorSwizzlingShader, uniformSettings:ShaderUniformSettings(), vertexBufferObject:movieProcessingContext.standardImageVBO, inputTextures:[framebuffer.texturePropertiesForOutputRotation(.noRotation)], context: movieProcessingContext)
+        renderQuadWithShader(movieProcessingContext.passthroughShader, uniformSettings:ShaderUniformSettings(), vertexBufferObject:movieProcessingContext.standardImageVBO, inputTextures:[framebuffer.texturePropertiesForOutputRotation(.noRotation)], context: movieProcessingContext)
         
         if movieProcessingContext.supportsTextureCaches() {
             glFinish()
         } else {
-            glReadPixels(0, 0, renderFramebuffer.size.width, renderFramebuffer.size.height, GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), CVPixelBufferGetBaseAddress(pixelBuffer))
+            glReadPixels(0, 0, GLint(CVPixelBufferGetBytesPerRow(pixelBuffer)/4), GLint(CVPixelBufferGetHeight(pixelBuffer)), GLenum(GL_BGRA), GLenum(GL_UNSIGNED_BYTE), CVPixelBufferGetBaseAddress(pixelBuffer))
         }
     }
     
