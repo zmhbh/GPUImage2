@@ -180,13 +180,7 @@ public class SpeakerOutput: AudioEncodingTarget {
         hasBuffer = false
     }
     
-    public func processAudioBuffer(_ sampleBuffer: CMSampleBuffer, shouldInvalidateSampleWhenDone: Bool) {
-        defer {
-            if(shouldInvalidateSampleWhenDone) {
-                CMSampleBufferInvalidate(sampleBuffer)
-            }
-        }
-        
+    public func processAudioBuffer(_ sampleBuffer: CMSampleBuffer) {
         if(!isReadyForMoreMediaData || !isPlaying) { return }
         
         if(!firstBufferReached) {

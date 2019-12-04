@@ -346,6 +346,6 @@ public class Camera: NSObject, ImageSource, AVCaptureVideoDataOutputSampleBuffer
     }
     
     func processAudioSampleBuffer(_ sampleBuffer:CMSampleBuffer) {
-        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer, shouldInvalidateSampleWhenDone: false)
+        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer)
     }
 }

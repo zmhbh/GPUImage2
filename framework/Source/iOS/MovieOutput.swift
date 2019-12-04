@@ -2,7 +2,7 @@ import AVFoundation
 
 public protocol AudioEncodingTarget {
     func activateAudioTrack()
-    func processAudioBuffer(_ sampleBuffer:CMSampleBuffer, shouldInvalidateSampleWhenDone:Bool)
+    func processAudioBuffer(_ sampleBuffer:CMSampleBuffer)
     // Note: This is not used for synchronized encoding.
     func readyForNextAudioBuffer() -> Bool
 }
@@ -307,14 +307,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         assetWriterAudioInput?.expectsMediaDataInRealTime = encodingLiveVideo
     }
     
-    public func processAudioBuffer(_ sampleBuffer:CMSampleBuffer, shouldInvalidateSampleWhenDone:Bool) {
+    public func processAudioBuffer(_ sampleBuffer:CMSampleBuffer) {
         let work = {
-            defer {
-                if(shouldInvalidateSampleWhenDone) {
-                    CMSampleBufferInvalidate(sampleBuffer)
-                }
-            }
-            
             guard self.isRecording,
                 self.assetWriter.status == .writing,
                 !self.audioEncodingIsFinished,

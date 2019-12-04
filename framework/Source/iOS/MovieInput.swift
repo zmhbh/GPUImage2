@@ -341,7 +341,7 @@ public class MovieInput: ImageSource {
         
         self.synchronizedEncodingDebugPrint("Process audio sample input")
         
-        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer, shouldInvalidateSampleWhenDone: true)
+        self.audioEncodingTarget?.processAudioBuffer(sampleBuffer)
     }
     
     func process(movieFrame frame:CMSampleBuffer) {
