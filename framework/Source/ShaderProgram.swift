@@ -93,9 +93,9 @@ public class ShaderProgram {
     }
     
     public func uniformIndex(_ uniform:String) -> GLint? {
-        if let uniformAddress = uniformAddresses[uniform] {
-            return uniformAddress
-        } else {
+        //if let uniformAddress = uniformAddresses[uniform] {
+        //    return uniformAddress
+        //} else {
             var uniformAddress:GLint = -1
             uniform.withGLChar{glString in
                 uniformAddress = glGetUniformLocation(self.program, glString)
@@ -107,7 +107,7 @@ public class ShaderProgram {
                 uniformAddresses[uniform] = uniformAddress
                 return uniformAddress
             }
-        }
+        //}
     }
     
     // MARK: -
