@@ -223,8 +223,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 print("WARNING: Unable to create pixel buffer, dropping frame")
                 return
             }
-
-            CVPixelBufferLockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
             
             do {
                 try self.renderIntoPixelBuffer(self.pixelBuffer!, framebuffer:framebuffer)
@@ -245,7 +243,6 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
                 self.totalFramesAppended += 1
             }
             
-            CVPixelBufferUnlockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
             self.pixelBuffer = nil
             
             sharedImageProcessingContext.runOperationAsynchronously {
@@ -268,12 +265,15 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
     }
     
     func renderIntoPixelBuffer(_ pixelBuffer:CVPixelBuffer, framebuffer:Framebuffer) throws {
+        CVPixelBufferLockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
+
+        // These were removed because they were causing a really bad flicker on iOS 13
         // Is this the first pixel buffer we have recieved?
-        if(renderFramebuffer == nil) {
+        /*if(renderFramebuffer == nil) {
             CVBufferSetAttachment(pixelBuffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2, .shouldPropagate)
             CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
             CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
-        }
+        }*/
         
         let bufferSize = GLSize(self.size)
         var cachedTextureRef:CVOpenGLESTexture? = nil
@@ -291,6 +291,8 @@ public class MovieOutput: ImageConsumer, AudioEncodingTarget {
         } else {
             glReadPixels(0, 0, GLint(CVPixelBufferGetBytesPerRow(pixelBuffer)/4), GLint(CVPixelBufferGetHeight(pixelBuffer)), GLenum(GL_BGRA), GLenum(GL_UNSIGNED_BYTE), CVPixelBufferGetBaseAddress(pixelBuffer))
         }
+
+        CVPixelBufferUnlockBaseAddress(self.pixelBuffer!, CVPixelBufferLockFlags(rawValue:CVOptionFlags(0)))
     }
     
     // MARK: -
